@@ -25,6 +25,13 @@ DSPY_CACHEDIR
 
 ## 2. Prepare Inputs
 
+Example `user_requirements.yaml` files are included under:
+
+```text
+examples/pancan_treatment_outcomes/user_requirements.yaml
+examples/hea_mechanical_properties/user_requirements.yaml
+```
+
 Expected input layout:
 
 ```text

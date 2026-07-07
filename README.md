@@ -70,6 +70,13 @@ pip install -r requirements.txt
 Create a `.env` file locally with your model and embedding provider settings.
 Do not commit `.env`.
 
+Example requirement files are provided under:
+
+```text
+examples/pancan_treatment_outcomes/user_requirements.yaml
+examples/hea_mechanical_properties/user_requirements.yaml
+```
+
 Run the stages separately:
 
 ```bash

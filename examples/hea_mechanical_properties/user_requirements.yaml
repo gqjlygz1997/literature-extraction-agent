@@ -1,0 +1,58 @@
+project_name: hea_mechanical_properties
+
+domain_description: >
+  Extract composition, processing history, phase structure, grain size, and
+  mechanical properties from local high-entropy alloy (HEA) or compositionally
+  complex alloy (CCA) papers. Focus on experimental studies. Exclude pure
+  simulation, first-principles calculation, and review papers.
+
+record:
+  name: material_record
+  meaning: >
+    One record represents one material sample within one paper. It includes the
+    alloy composition, composition basis, processing history, phase structure,
+    grain size, mechanical test conditions, and reported mechanical properties
+    for that same material sample. If any field listed below has a different
+    value, keep it as a separate record instead of merging it with another
+    material sample or processing route.
+
+  fields:
+    - name: composition
+      definition: Alloy composition, including elements and composition ratios, such as atomic percent or weight percent.
+      type: string
+
+    - name: composition_type
+      definition: Composition basis, such as atomic percent, weight percent, at%, or wt%.
+      type: string
+
+    - name: processes
+      definition: Processing history in chronological order, including melting, casting, homogenization, rolling, annealing, quenching, and related parameters.
+      type: list
+
+    - name: phase
+      definition: Phase structure, such as FCC, BCC, HCP, B2, Laves phase, or intermetallic phase.
+      type: list
+
+    - name: grain_size
+      definition: Average grain size with unit, such as micrometer, nanometer, um, or nm.
+      type: string
+
+    - name: ys
+      definition: YS = yield strength, usually reported in MPa.
+      type: number
+
+    - name: uts
+      definition: UTS = ultimate tensile strength or ultimate compressive strength, usually reported in MPa.
+      type: number
+
+    - name: strain
+      definition: Elongation, plastic strain, or fracture strain, usually reported as a percentage.
+      type: number
+
+    - name: test_type
+      definition: Mechanical test type, such as tensile test or compression test.
+      type: string
+
+    - name: test_temperature
+      definition: Mechanical test temperature, such as room temperature, 25 C, -196 C, or 600 C.
+      type: string
