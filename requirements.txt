@@ -1,0 +1,15 @@
+pyyaml
+beautifulsoup4
+lxml
+tqdm
+tiktoken
+langchain-openai
+langchain-core
+langchain-chroma
+chromadb
+jsonlines
+python-dotenv
+dspy>=2.5.22
+google-genai
+httpx[socks]
+socksio

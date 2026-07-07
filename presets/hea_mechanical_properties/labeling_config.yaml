@@ -1,0 +1,144 @@
+fields:
+- field_name: composition
+  field_definition: Alloy composition, including elements and composition ratios, such as atomic percent or weight percent.
+  semantic_query: Alloy composition, nominal composition, chemical formula, atomic percent, weight percent, high-entropy alloy composition, multi-principal element alloy composition.
+  regex_patterns:
+  - pattern: "\\b(composition|nominal composition|chemical composition|at\\.?%|wt\\.?%|atomic percent|weight percent|equiatomic|non-equiatomic)\\b"
+    description: Composition and composition basis terms
+    strength: strong
+  - pattern: "\\b(?:Al|Co|Cr|Fe|Ni|Mn|Ti|V|Nb|Mo|Ta|W|Zr|Hf|Cu|Mg|Si)[A-Za-z0-9\\.\\(\\)]*(?:Co|Cr|Fe|Ni|Mn|Ti|V|Nb|Mo|Ta|W|Zr|Hf|Cu|Al)[A-Za-z0-9\\.\\(\\)]*\\b"
+    description: Compact alloy formula-like strings
+    strength: medium
+  table_header_keywords: [composition, alloy, nominal, at%, wt%, element]
+  section_include: [abstract, experimental, experiment, materials, methods, results, composition, alloy preparation]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: &retrieval_defaults
+    semantic_fetch_k: 20
+    regex_fetch_k: 20
+    table_top_k: 5
+    text_top_k: 5
+    rrf_k: 60
+- field_name: composition_type
+  field_definition: Composition basis, such as atomic percent, weight percent, at%, or wt%.
+  semantic_query: Composition basis, atomic percent, at%, weight percent, wt%, nominal ratio, molar ratio.
+  regex_patterns:
+  - pattern: "\\b(at\\.?%|atomic percent|atomic ratio|wt\\.?%|weight percent|molar ratio|nominal ratio)\\b"
+    description: Composition basis markers
+    strength: strong
+  table_header_keywords: [at%, wt%, atomic percent, weight percent, nominal]
+  section_include: [experimental, experiment, materials, methods, composition, table]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+- field_name: processes
+  field_definition: Processing history in chronological order, including melting, casting, homogenization, rolling, annealing, quenching, and related parameters.
+  semantic_query: Processing route, synthesis, fabrication, arc melting, induction melting, casting, homogenization, rolling, cold rolling, annealing, aging, quenching, heat treatment, additive manufacturing.
+  regex_patterns:
+  - pattern: "\\b(arc melting|induction melting|vacuum melting|casting|suction casting|drop casting|homogenization|homogenized|rolling|cold rolled|hot rolled|annealing|annealed|aging|aged|solution treatment|quenching|quenched|heat treatment|additive manufacturing|selective laser melting|SLM|HPT|ECAP)\\b"
+    description: Processing and synthesis method terms
+    strength: strong
+  - pattern: "\\b(\\d+\\s*(?:K|C|°C|h|min|s)|\\d+\\s*%\\s*reduction|\\d+\\s*MPa)\\b"
+    description: Processing parameters such as temperature, duration, reduction, pressure
+    strength: medium
+  table_header_keywords: [process, processing, annealing, rolling, casting, heat treatment, condition]
+  section_include: [experimental, experiment, materials and methods, synthesis, fabrication, processing, sample preparation]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+- field_name: phase
+  field_definition: Phase structure, such as FCC, BCC, HCP, B2, Laves phase, or intermetallic phase.
+  semantic_query: Phase structure, FCC, BCC, HCP, B2, Laves phase, sigma phase, intermetallic compounds, precipitates, XRD, microstructure.
+  regex_patterns:
+  - pattern: "\\b(FCC|BCC|HCP|B2|Laves|sigma|σ|intermetallic|precipitate|carbide|oxide|amorphous|phase|phases|XRD)\\b"
+    description: Phase structure terms
+    strength: strong
+  table_header_keywords: [phase, phases, FCC, BCC, HCP, B2, XRD]
+  section_include: [abstract, results, discussion, microstructure, phase, xrd, characterization]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+- field_name: grain_size
+  field_definition: Average grain size with unit, such as micrometer, nanometer, um, or nm.
+  semantic_query: Grain size, average grain size, grain diameter, grain refinement, microstructure, EBSD, SEM, TEM.
+  regex_patterns:
+  - pattern: "\\b(grain size|average grain|grain diameter|grain refinement|EBSD|SEM|TEM)\\b"
+    description: Grain size terms
+    strength: strong
+  - pattern: "\\b\\d+(?:\\.\\d+)?\\s*(?:nm|um|μm|micrometer|micrometre|nanometer|nanometre)\\b"
+    description: Grain size values with units
+    strength: strong
+  table_header_keywords: [grain size, grain, EBSD, SEM, TEM, nm, um]
+  section_include: [abstract, results, discussion, microstructure, grain, characterization]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+- field_name: ys
+  field_definition: YS = yield strength, usually reported in MPa.
+  semantic_query: Yield strength, yield stress, YS, mechanical properties, tensile strength, compressive yield strength, MPa.
+  regex_patterns:
+  - pattern: "\\b(yield strength|yield stress|\\bYS\\b|0\\.2% proof stress|proof stress)\\b"
+    description: Yield strength terms
+    strength: strong
+  - pattern: "\\b\\d+(?:\\.\\d+)?\\s*(?:MPa|GPa)\\b"
+    description: Strength values with units
+    strength: medium
+  table_header_keywords: [YS, yield strength, yield stress, MPa, GPa]
+  section_include: [abstract, results, discussion, mechanical, tensile, compression, compressive, properties]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+- field_name: uts
+  field_definition: UTS = ultimate tensile strength or ultimate compressive strength, usually reported in MPa.
+  semantic_query: Ultimate tensile strength, ultimate compressive strength, UTS, UCS, tensile strength, compressive strength, mechanical properties, MPa.
+  regex_patterns:
+  - pattern: "\\b(ultimate tensile strength|ultimate compressive strength|\\bUTS\\b|\\bUCS\\b|tensile strength|compressive strength)\\b"
+    description: Ultimate strength terms
+    strength: strong
+  - pattern: "\\b\\d+(?:\\.\\d+)?\\s*(?:MPa|GPa)\\b"
+    description: Strength values with units
+    strength: medium
+  table_header_keywords: [UTS, UCS, tensile strength, compressive strength, MPa, GPa]
+  section_include: [abstract, results, discussion, mechanical, tensile, compression, compressive, properties]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+- field_name: strain
+  field_definition: Elongation, plastic strain, or fracture strain, usually reported as a percentage.
+  semantic_query: Fracture strain, elongation, tensile ductility, plastic strain, compressive strain, strain to failure, percent elongation.
+  regex_patterns:
+  - pattern: "\\b(fracture strain|elongation|ductility|plastic strain|strain to failure|compressive strain)\\b"
+    description: Strain and ductility terms
+    strength: strong
+  - pattern: "\\b\\d+(?:\\.\\d+)?\\s*%\\b"
+    description: Percentage strain values
+    strength: medium
+  table_header_keywords: [strain, elongation, ductility, fracture strain, "%"]
+  section_include: [abstract, results, discussion, mechanical, tensile, compression, compressive, properties]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+- field_name: test_type
+  field_definition: Mechanical test type, such as tensile test or compression test.
+  semantic_query: Mechanical test type, tensile test, compression test, compressive test, tension, compression, mechanical testing.
+  regex_patterns:
+  - pattern: "\\b(tensile test|tension test|compression test|compressive test|tensile properties|compressive properties|mechanical testing)\\b"
+    description: Mechanical test type terms
+    strength: strong
+  table_header_keywords: [test type, tensile, compression, compressive]
+  section_include: [experimental, methods, results, mechanical, tensile, compression, compressive, properties]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+- field_name: test_temperature
+  field_definition: Mechanical test temperature, such as room temperature, 25 C, -196 C, or 600 C.
+  semantic_query: Test temperature, room temperature, cryogenic temperature, elevated temperature, tensile test temperature, compression test temperature.
+  regex_patterns:
+  - pattern: "\\b(room temperature|RT|cryogenic|liquid nitrogen|elevated temperature|test temperature)\\b"
+    description: Test temperature terms
+    strength: strong
+  - pattern: "\\b-?\\d+(?:\\.\\d+)?\\s*(?:K|C|°C)\\b"
+    description: Temperature values
+    strength: medium
+  table_header_keywords: [temperature, test temperature, RT, K, C]
+  section_include: [experimental, methods, results, mechanical, tensile, compression, compressive, properties]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+embedding:
+  model: gemini-embedding-001
+  provider: gemini
+labeler:
+  model: kimi-k2.6
+  temperature: 1.0
+  max_tokens: 1500

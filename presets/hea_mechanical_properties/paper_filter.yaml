@@ -1,0 +1,70 @@
+domain_name: hea_mechanical_properties
+domain_description: Extract composition, processing history, phase structure, grain size,
+  and mechanical properties from experimental high-entropy alloy or compositionally
+  complex alloy papers.
+target_fields:
+- name: composition
+  description: Alloy composition, including elements and composition ratios.
+  final_type: string
+- name: composition_type
+  description: Composition basis, such as at%, wt%, atomic percent, or weight percent.
+  final_type: string
+- name: processes
+  description: Processing history in chronological order.
+  final_type: list
+- name: phase
+  description: Phase structure, such as FCC, BCC, HCP, B2, Laves, or intermetallic phase.
+  final_type: list
+- name: grain_size
+  description: Average grain size with unit.
+  final_type: string
+- name: ys
+  description: Yield strength, usually in MPa.
+  final_type: number
+- name: uts
+  description: Ultimate tensile or compressive strength, usually in MPa.
+  final_type: number
+- name: strain
+  description: Elongation, plastic strain, or fracture strain.
+  final_type: number
+- name: test_type
+  description: Mechanical test type, such as tensile or compression test.
+  final_type: string
+- name: test_temperature
+  description: Mechanical test temperature.
+  final_type: string
+paper_filter:
+  input_scope: title_and_abstract
+  inclusive_when_uncertain: true
+  pass_condition: all_required_not_false
+  criteria:
+  - name: is_hea_or_cca_topic
+    question: Might this paper be about high-entropy alloys, medium-entropy alloys,
+      multi-principal-element alloys, or compositionally complex alloys rather than
+      an unrelated material class?
+    expected_answer: true
+    rationale: Keep papers that may contain HEA/CCA alloy records. Reject clearly
+      unrelated materials, biology, medicine, or non-alloy topics.
+    required: true
+  - name: is_experimental_materials_study
+    question: Might this paper report original experimental alloy fabrication,
+      processing, characterization, or mechanical testing, rather than being only
+      simulation, first-principles calculation, modeling, review, or commentary?
+    expected_answer: true
+    rationale: ALLMAT focuses on experimental records with real material samples.
+      Keep uncertain cases for high recall.
+    required: true
+  - name: might_report_composition_or_processing
+    question: Might this paper report alloy compositions or processing routes such
+      as melting, casting, homogenization, rolling, annealing, quenching, aging, or
+      additive manufacturing?
+    expected_answer: true
+    rationale: Composition and processing history define the material record.
+    required: true
+  - name: might_report_target_properties
+    question: Might this paper report phase structure, grain size, yield strength,
+      ultimate tensile or compressive strength, strain, or mechanical test conditions?
+    expected_answer: true
+    rationale: Keep papers likely to contain at least one target property for later
+      extraction.
+    required: true

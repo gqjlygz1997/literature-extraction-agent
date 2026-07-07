@@ -1,0 +1,84 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# macOS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Logs
+*.log
+logs/
+
+# Runtime cache
+.cache/
+tmp/
+temp/
+*.tmp
+
+# DSPy / LangChain / LLM cache
+.dspy_cache/
+dspy_cache/
+langchain_cache/
+
+# Chroma / vector stores
+chroma/
+**/chroma/
+*.sqlite3
+*.db
+
+# Experiment outputs and local data
+experiments/
+outputs/
+output/
+data/
+raw_data/
+input_papers/
+papers/
+downloads/
+pdfs/
+xmls/
+xml/
+pmc_xml/
+paper_xml/
+
+# Pipeline intermediate/final generated files
+paper_filter_results.jsonl
+passed_papers.jsonl
+rejected_papers.jsonl
+parsed_chunks.jsonl
+preprocessing_summary.json
+labeled_chunks.jsonl
+labeling_summary.json
+extracted_records.jsonl
+extraction_summary.json
+postprocessed_records.jsonl
+postprocessing_summary.json
+records.csv
+*_summary.json
+
+# Keep source presets
+!presets/
+!presets/**
+
+# Optional local reports
+LABELING_REPORT.md
+IMPLEMENTATION_SUMMARY.md

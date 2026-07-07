@@ -1,0 +1,172 @@
+fields:
+- field_name: patient_group
+  field_definition: Patient group or trial arm, such as treatment arm, cohort, subgroup, or a specific patient population.
+  semantic_query: Patient group, treatment arm, cohort, subgroup, study population, neoadjuvant group, upfront surgery group, pancreatic cancer patients.
+  regex_patterns:
+  - pattern: '\b(group|arm|cohort|subgroup|population|patients?|cases?)\b'
+    description: Patient grouping terms
+    strength: strong
+  - pattern: '\b(neoadjuvant|adjuvant|upfront surgery|surgery first|resection|treated with|received)\b'
+    description: Treatment-defined group terms
+    strength: medium
+  table_header_keywords: [group, arm, cohort, subgroup, patients, n, population]
+  section_include: [abstract, methods, results, baseline, characteristics, study population, patient characteristics]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: &retrieval_defaults
+    semantic_fetch_k: 20
+    regex_fetch_k: 20
+    table_top_k: 5
+    text_top_k: 5
+    rrf_k: 60
+- field_name: sample_size
+  field_definition: Number of patients or sample size for this specific patient group or treatment arm.
+  semantic_query: Sample size, number of patients, cohort size, patients included, treatment arm size, pancreatic cancer study population.
+  regex_patterns:
+  - pattern: '\b(n\s*=\s*\d+|N\s*=\s*\d+|\d+\s+patients?|\d+\s+cases?)\b'
+    description: Sample size expressions
+    strength: strong
+  - pattern: '\b(total of|included|enrolled|identified|collected|analyzed)\b'
+    description: Enrollment and cohort size context
+    strength: medium
+  table_header_keywords: [n, N, patients, cases, sample size, number, total]
+  section_include: [abstract, methods, results, baseline, characteristics, study population, patient characteristics]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+- field_name: disease_stage
+  field_definition: Disease stage or clinical setting for this patient group, such as stage I-III, metastatic, locally advanced, resectable, borderline resectable, or unresectable pancreatic cancer.
+  semantic_query: Disease stage, clinical stage, resectable pancreatic cancer, borderline resectable, locally advanced, metastatic, non-metastatic PDAC.
+  regex_patterns:
+  - pattern: '\b(stage\s*(?:I|II|III|IV|1|2|3|4)(?:\s*[-–]\s*(?:I|II|III|IV|1|2|3|4))?|metastatic|non[-\s]?metastatic|locally advanced|borderline resectable|resectable|unresectable|PDAC)\b'
+    description: Disease stage and clinical setting terms
+    strength: strong
+  table_header_keywords: [stage, metastatic, resectable, locally advanced, borderline, unresectable, PDAC]
+  section_include: [abstract, methods, results, baseline, characteristics, eligibility, study population]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+- field_name: treatment_regimen
+  field_definition: Treatment or intervention received by this patient group, such as chemotherapy, immunotherapy, surgery, neoadjuvant therapy, adjuvant therapy, or combination treatment.
+  semantic_query: Treatment regimen, chemotherapy, FOLFIRINOX, gemcitabine, nab-paclitaxel, surgery, resection, neoadjuvant therapy, adjuvant therapy, chemoradiotherapy.
+  regex_patterns:
+  - pattern: '\b(FOLFIRINOX|mFOLFIRINOX|gemcitabine|nab[-\s]?paclitaxel|GnP|AG|capecitabine|erlotinib|cisplatin|nal[-\s]?IRI|5[-\s]?FU|leucovorin|chemotherapy|radiotherapy|chemoradiotherapy|immunotherapy|targeted therapy|surgery|resection)\b'
+    description: Pancreatic cancer treatment terms
+    strength: strong
+  - pattern: '\b(neoadjuvant|adjuvant|upfront|preoperative|postoperative|first[-\s]?line|second[-\s]?line|maintenance|palliative)\b'
+    description: Treatment setting terms
+    strength: medium
+  table_header_keywords: [treatment, regimen, therapy, chemotherapy, surgery, FOLFIRINOX, gemcitabine, nab-paclitaxel]
+  section_include: [abstract, methods, treatment, intervention, results, baseline, patient characteristics]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+- field_name: line_of_therapy
+  field_definition: Line of therapy or treatment setting, such as first-line, second-line, third-line, neoadjuvant, adjuvant, 1L, or 2L.
+  semantic_query: Line of therapy, first-line treatment, second-line treatment, neoadjuvant therapy, adjuvant therapy, maintenance therapy, palliative therapy.
+  regex_patterns:
+  - pattern: '\b(first[-\s]?line|1L|1st line|second[-\s]?line|2L|2nd line|third[-\s]?line|3L|neoadjuvant|neo[-\s]?adjuvant|adjuvant|maintenance|palliative|preoperative|postoperative)\b'
+    description: Therapy line and setting terms
+    strength: strong
+  table_header_keywords: [line, setting, neoadjuvant, adjuvant, first-line, second-line, 1L, 2L]
+  section_include: [abstract, methods, treatment, intervention, results]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+- field_name: os
+  field_definition: OS = overall survival for this patient group and treatment regimen. Prefer median OS, usually reported in months.
+  semantic_query: Overall survival, OS, median overall survival, mOS, survival outcome, months, pancreatic cancer treatment outcome.
+  regex_patterns:
+  - pattern: '\b(overall survival|OS|mOS|median OS|median overall survival)\b'
+    description: Overall survival terms
+    strength: strong
+  - pattern: '\b\d+(?:\.\d+)?\s*(?:months?|mos?|years?|yrs?)\b'
+    description: Survival duration values
+    strength: medium
+  table_header_keywords: [OS, overall survival, median OS, mOS, survival, months]
+  section_include: [abstract, results, survival, outcomes, efficacy, discussion]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+- field_name: pfs
+  field_definition: PFS = progression-free survival for this patient group and treatment regimen. Prefer median PFS, usually reported in months.
+  semantic_query: Progression-free survival, PFS, median PFS, mPFS, disease-free survival, recurrence-free survival, months.
+  regex_patterns:
+  - pattern: '\b(progression[-\s]?free survival|PFS|mPFS|median PFS|disease[-\s]?free survival|DFS|recurrence[-\s]?free survival|RFS)\b'
+    description: PFS and related survival endpoint terms
+    strength: strong
+  - pattern: '\b\d+(?:\.\d+)?\s*(?:months?|mos?|years?|yrs?)\b'
+    description: Survival duration values
+    strength: medium
+  table_header_keywords: [PFS, progression-free survival, median PFS, mPFS, DFS, RFS, months]
+  section_include: [abstract, results, survival, outcomes, efficacy, discussion]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+- field_name: orr
+  field_definition: ORR = objective response rate for this patient group and treatment regimen, usually reported as a percentage.
+  semantic_query: Objective response rate, ORR, response rate, complete response, partial response, tumor response percentage.
+  regex_patterns:
+  - pattern: '\b(objective response rate|ORR|overall response rate|response rate|complete response|partial response|CR|PR)\b'
+    description: Objective response terms
+    strength: strong
+  - pattern: '\b\d+(?:\.\d+)?\s*%\b'
+    description: Percentage values
+    strength: medium
+  table_header_keywords: [ORR, objective response, response rate, CR, PR, "%"]
+  section_include: [abstract, results, response, outcomes, efficacy]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+- field_name: dcr
+  field_definition: DCR = disease control rate for this patient group and treatment regimen, usually reported as a percentage.
+  semantic_query: Disease control rate, DCR, disease control, stable disease, response outcome percentage.
+  regex_patterns:
+  - pattern: '\b(disease control rate|DCR|disease control|stable disease|SD)\b'
+    description: Disease control terms
+    strength: strong
+  - pattern: '\b\d+(?:\.\d+)?\s*%\b'
+    description: Percentage values
+    strength: medium
+  table_header_keywords: [DCR, disease control, stable disease, SD, "%"]
+  section_include: [abstract, results, response, outcomes, efficacy]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+- field_name: hr
+  field_definition: HR = hazard ratio associated with OS, PFS, or another outcome for this patient group or comparison.
+  semantic_query: Hazard ratio, HR, Cox regression, multivariable analysis, survival comparison, prognostic factor.
+  regex_patterns:
+  - pattern: '\b(hazard ratio|HR|Cox|multivariable|univariable|proportional hazards)\b'
+    description: Hazard ratio and survival model terms
+    strength: strong
+  - pattern: '\bHR\s*[=:]?\s*\d+(?:\.\d+)?\b'
+    description: Explicit HR value
+    strength: strong
+  table_header_keywords: [HR, hazard ratio, Cox, univariate, multivariate, multivariable]
+  section_include: [abstract, results, survival, multivariate, multivariable, prognostic, cox, discussion]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+- field_name: ci
+  field_definition: CI = confidence interval associated with HR or survival outcome, usually a 95% CI.
+  semantic_query: Confidence interval, 95% CI, confidence limits, hazard ratio confidence interval, survival estimate interval.
+  regex_patterns:
+  - pattern: '\b(95\s*%\s*CI|confidence interval|CI)\b'
+    description: Confidence interval terms
+    strength: strong
+  - pattern: '\b\d+(?:\.\d+)?\s*[-–,]\s*\d+(?:\.\d+)?\b'
+    description: Confidence interval numeric range
+    strength: medium
+  table_header_keywords: [CI, 95% CI, confidence interval, lower, upper]
+  section_include: [abstract, results, survival, multivariate, multivariable, prognostic, cox, discussion]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+- field_name: p_value
+  field_definition: p-value for statistical significance associated with the reported comparison or outcome.
+  semantic_query: P-value, statistical significance, p < 0.05, log-rank test, comparison significance, survival difference.
+  regex_patterns:
+  - pattern: '\b(p\s*[<=>]\s*0?\.\d+|P\s*[<=>]\s*0?\.\d+|p-value|P-value|log[-\s]?rank)\b'
+    description: P-value and significance terms
+    strength: strong
+  table_header_keywords: [p, p-value, P value, significance, log-rank]
+  section_include: [abstract, results, survival, outcomes, efficacy, table, discussion]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+embedding:
+  model: gemini-embedding-001
+  provider: gemini
+labeler:
+  model: kimi-k2.6
+  temperature: 1.0
+  max_tokens: 1500

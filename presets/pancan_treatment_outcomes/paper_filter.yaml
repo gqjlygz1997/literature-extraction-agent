@@ -1,0 +1,68 @@
+domain_name: pancan_treatment_outcomes
+domain_description: >
+  Extract treatment regimens and survival or efficacy outcomes from local
+  full-text pancreatic cancer clinical treatment papers. Focus on human clinical
+  studies such as RCTs, cohort studies, and retrospective studies. Exclude
+  reviews, mechanism-only studies, cell experiments, and animal experiments.
+target_fields:
+- name: patient_group
+  description: Patient group or trial arm.
+  final_type: string
+- name: sample_size
+  description: Number of patients or sample size.
+  final_type: number
+- name: disease_stage
+  description: Disease stage or clinical setting.
+  final_type: string
+- name: treatment_regimen
+  description: Treatment or intervention received by the group.
+  final_type: string
+- name: line_of_therapy
+  description: Line of therapy or treatment setting.
+  final_type: string
+- name: os
+  description: Overall survival.
+  final_type: number
+- name: pfs
+  description: Progression-free survival.
+  final_type: number
+- name: orr
+  description: Objective response rate.
+  final_type: number
+- name: dcr
+  description: Disease control rate.
+  final_type: number
+- name: hr
+  description: Hazard ratio.
+  final_type: number
+- name: ci
+  description: Confidence interval.
+  final_type: string
+- name: p_value
+  description: p-value.
+  final_type: string
+paper_filter:
+  input_scope: title_and_abstract
+  inclusive_when_uncertain: true
+  pass_condition: all_required_not_false
+  criteria:
+  - name: is_pancreatic_cancer_clinical_topic
+    question: Might this paper be about human pancreatic cancer or pancreatic ductal adenocarcinoma clinical treatment rather than an unrelated disease, preclinical-only model, or mechanism-only study?
+    expected_answer: true
+    rationale: Keep papers that may contain treatment-outcome records for pancreatic cancer. Reject clearly unrelated diseases or laboratory-only studies.
+    required: true
+  - name: is_original_human_study
+    question: Might this paper report original human clinical data such as a randomized trial, cohort study, registry analysis, or retrospective clinical study rather than being only a review, editorial, protocol, case report, animal study, or cell-line study?
+    expected_answer: true
+    rationale: The extraction target is structured clinical outcome records from human studies. Keep uncertain cases for high recall.
+    required: true
+  - name: might_report_treatment_groups
+    question: Might this paper describe treatment arms, patient cohorts, subgroups, surgery, chemotherapy, radiotherapy, immunotherapy, targeted therapy, neoadjuvant therapy, adjuvant therapy, first-line therapy, or second-line therapy?
+    expected_answer: true
+    rationale: Treatment/group context is required to build a treatment_outcome_record.
+    required: true
+  - name: might_report_survival_or_response_outcomes
+    question: Might this paper report clinical outcomes such as OS, PFS, ORR, DCR, HR, CI, p-value, survival curves, response rates, or comparable efficacy endpoints?
+    expected_answer: true
+    rationale: At least one outcome/statistic is needed downstream, but title/abstract filtering should remain inclusive.
+    required: true

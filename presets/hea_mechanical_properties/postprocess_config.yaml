@@ -1,0 +1,53 @@
+version: 1
+description: >
+  ALLMAT-style post-processing preset for HEA mechanical-property records.
+  It keeps the generic pipeline but adds materials-specific standard terms.
+
+null_values:
+  - not specified
+  - not stated
+  - unavailable
+
+numeric_fields:
+  ys:
+    unit: MPa
+  uts:
+    unit: MPa
+  strain:
+    unit: percent
+  grain_size:
+    unit: um
+  test_temperature:
+    unit: C
+
+standardize:
+  composition_type:
+    terms:
+      atomic: [atomic, at, at%, atomic percent, atomic percentage]
+      weight: [weight, wt, wt%, weight percent, weight percentage]
+
+  phase:
+    multiple: true
+    terms:
+      FCC: [FCC, f.c.c., face centered cubic, face-centered cubic]
+      BCC: [BCC, b.c.c., body centered cubic, body-centered cubic]
+      HCP: [HCP, h.c.p., hexagonal close packed, hexagonal close-packed]
+      B2: [B2, ordered BCC, ordered bcc]
+      L12: [L12, L1 2, gamma prime]
+      Laves: [Laves, laves phase]
+      sigma: [sigma, sigma phase, σ, σ phase]
+      amorphous: [amorphous, glassy]
+      intermetallic: [intermetallic, intermetallic phase, IM]
+
+  test_type:
+    terms:
+      tensile: [tensile, tension, tensile test, tensile testing]
+      compressive: [compressive, compression, compressive test, compression test]
+
+validity:
+  required_any:
+    - ys
+    - uts
+    - strain
+    - phase
+    - grain_size
