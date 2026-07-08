@@ -12,16 +12,31 @@ pip install -r requirements.txt
 Create a local `.env` file with model and embedding settings. Keep it private
 and do not commit it.
 
-Example variable names:
+Start from the template:
+
+```bash
+cp .env.example .env
+```
+
+Minimum required variables:
 
 ```text
-LLM_MODEL
-LLM_API_KEY
-LLM_BASE_URL
-EMBEDDING_MODEL
-GEMINI_API_KEY
-DSPY_CACHEDIR
+LLM_API_KEY       OpenAI-compatible chat model API key
+LLM_BASE_URL      OpenAI-compatible API base URL, for example https://api.moonshot.cn/v1
+LLM_MODEL         chat model name, for example kimi-k2.6
+LLM_TEMPERATURE   default: 0.6
+
+GEMINI_API_KEY    Google AI Studio key for Gemini embeddings
+EMBEDDING_PROVIDER=gemini
+EMBEDDING_MODEL=gemini-embedding-001
+
+DSPY_CACHEDIR=/tmp/dspy_cache
+NCBI_EMAIL=your_email@example.com
 ```
+
+`NCBI_EMAIL` is optional but recommended for polite NCBI/PMC metadata requests.
+WOS parsing and article preprocessing do not call an LLM, but paper filtering,
+labeling, and extraction do.
 
 ## 2. Prepare Inputs
 
