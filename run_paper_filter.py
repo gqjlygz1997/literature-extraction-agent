@@ -7,6 +7,12 @@ Main usage (requirements file):
       --input       experiments/pancan/input_papers \\
       --output      experiments/pancan/outputs
 
+WOS metadata usage:
+    python run_paper_filter.py \\
+      --requirements experiments/pancan/user_requirements.yaml \\
+      --metadata    experiments/pancan/wos_ingest/candidate_papers.jsonl \\
+      --output      experiments/pancan/paper_filter
+
 Fallback (inline args, no requirements file):
     python run_paper_filter.py \\
       --domain "Extract treatment outcomes from pancreatic cancer clinical papers" \\
@@ -131,7 +137,7 @@ def _configure_dspy(model_override: str | None = None) -> str:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run paper-filter MVP: classify local XML/HTML papers as pass/reject.",
+        description="Run paper-filter MVP: classify local XML/HTML papers or WOS metadata as pass/reject.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
@@ -163,11 +169,18 @@ def _build_parser() -> argparse.ArgumentParser:
         default="",
     )
 
-    # --- required I/O ---
-    parser.add_argument(
-        "--input", required=True, metavar="DIR",
+    # --- paper source specification ---
+    source_group = parser.add_mutually_exclusive_group(required=True)
+    source_group.add_argument(
+        "--input", metavar="DIR",
         help="Directory containing local XML / HTML paper files.",
     )
+    source_group.add_argument(
+        "--metadata", metavar="PATH",
+        help="candidate_papers.jsonl produced by run_wos_ingest.py.",
+    )
+
+    # --- required output ---
     parser.add_argument(
         "--output", required=True, metavar="DIR",
         help="Directory where output files will be written.",
@@ -310,6 +323,7 @@ def main(argv: list[str] | None = None) -> int:
 
     counts = workflow.run_paper_filter_mvp(
         papers_dir=args.input,
+        metadata_path=args.metadata,
         user_requirements=user_requirements,
         output_dir=args.output,
         paper_filter_config=paper_filter_config,

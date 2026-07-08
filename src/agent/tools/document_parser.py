@@ -20,6 +20,7 @@ MetadataQuality = Literal[
     "structured_xml",     # JATS XML with title + abstract
     "html_abstract",      # HTML with title + extracted abstract
     "html_front_matter",  # HTML with title but only front-matter fallback
+    "external_metadata",  # title/abstract imported from WOS or another index
     "title_only",         # only a title was found
     "parse_error",        # parsing failed entirely
 ]
@@ -36,7 +37,7 @@ class ArticleMeta:
     """
 
     source_path: Path
-    file_type: Literal["xml", "html", "txt", "unknown"]
+    file_type: Literal["xml", "html", "txt", "metadata", "unknown"]
     title: str = ""
     abstract: str = ""
     text_for_filter: str = ""       # abstract or front_matter fallback

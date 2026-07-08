@@ -9,7 +9,7 @@ The user provides:
 
 ```text
 user_requirements.yaml
-local JATS/XML paper folder
+WOS savedrecs.txt and/or local JATS/XML paper folder
 optional presets/<project_name>/
 ```
 
@@ -17,17 +17,38 @@ optional presets/<project_name>/
 domain requirements. Presets are optional hand-written configs/prompts used
 before any DSPy/LLM-generated configuration.
 
+## 0. WOS Metadata Ingestion
+
+When the input starts from a Web of Science tagged-text export, the system
+parses bibliographic metadata before attempting any full-text download.
+
+Processing steps:
+
+```text
+parse savedrecs.txt
+extract title, abstract, DOI, PMID, and WOS UID
+write candidate metadata rows for paper filtering
+```
+
+Main outputs:
+
+```text
+candidate_papers.jsonl
+wos_ingestion_summary.json
+```
+
 ## 1. Paper Filter
 
-The paper filter reads title, abstract, and front matter, then decides whether
-each paper should enter the full pipeline.
+The paper filter reads title and abstract from WOS metadata, or title,
+abstract, and front matter from local XML/HTML files. It decides whether each
+paper should enter full-text acquisition and parsing.
 
 Execution policy:
 
 ```text
 use paper_filter.yaml preset if available
 otherwise generate paper_filter.yaml from user_requirements.yaml
-use DSPy/LLM to classify pass/reject
+use DSPy/LLM to classify pass/reject from title and abstract
 write pass/reject decisions and reasons
 ```
 
@@ -43,7 +64,31 @@ run_summary.json
 This follows the ALLMAT idea of title/abstract-level paper classification, but
 makes the filter configurable for non-HEA domains.
 
-## 2. Article Processing
+## 2. Full-Text Acquisition
+
+When paper filtering starts from WOS metadata, only passed papers are resolved
+to full text. This avoids wasting downloads on clearly irrelevant papers.
+
+Processing steps:
+
+```text
+use pass-paper DOI/PMID to query PMCID
+download available PMC JATS/XML
+write XML-backed rows for preprocessing
+```
+
+Main outputs:
+
+```text
+fulltext_acquisition_results.jsonl
+downloaded_papers.jsonl
+fulltext_acquisition_summary.json
+pmc_xml/
+```
+
+If the user already has local JATS/XML files, this stage can be skipped.
+
+## 3. Article Processing
 
 The parser fully parses JATS/XML papers, preserves section hierarchy, and
 converts article content into unified chunks.
@@ -69,7 +114,7 @@ preprocessing_summary.json
 Table chunks preserve caption, headers, raw rows, and a text representation for
 retrieval and LLM labeling.
 
-## 3. Labeling
+## 4. Labeling
 
 Labeling finds chunks relevant to each target field.
 
@@ -105,7 +150,7 @@ Each output row is chunk-centric:
 }
 ```
 
-## 4. Extraction
+## 5. Extraction
 
 Extraction uses contextualized extraction only in the MVP. It collects relevant
 labeled chunks for each paper, preserves original article order, and extracts
@@ -128,7 +173,7 @@ Main output:
 extracted_records.jsonl
 ```
 
-## 5. Post-Processing
+## 6. Post-Processing
 
 Post-processing makes extracted JSONL easier to analyze.
 
@@ -158,6 +203,8 @@ Implemented:
 
 ```text
 paper filtering
+WOS metadata ingestion
+PMC XML acquisition
 JATS/XML preprocessing
 labeling
 contextualized extraction

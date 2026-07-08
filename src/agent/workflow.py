@@ -42,26 +42,31 @@ class DomainExtractionWorkflow:
 
     def run_paper_filter_mvp(
         self,
-        papers_dir: str | Path,
+        papers_dir: str | Path | None,
         user_requirements,
         output_dir: str | Path,
+        metadata_path: str | Path | None = None,
         paper_filter_config=None,
         dry_run: bool = False,
         limit: int | None = None,
     ):
-        """Run the paper-filter MVP over local papers.
+        """Run the paper-filter MVP over local papers or external metadata.
 
         Flow:
         1. Generate paper_filter.yaml, or reuse one only when provided via --config.
-        2. Scan papers_dir for XML and HTML files.
-        3. Light-parse title + text_for_filter per paper.
+        2. Read WOS/candidate metadata rows, or scan papers_dir for XML/HTML files.
+        3. Build title + text_for_filter per paper.
         4. Classify each paper (pass / reject) via LLM (skipped in dry_run).
         5. Write paper_filter_results.jsonl, passed_papers.jsonl,
            rejected_papers.jsonl, run_summary.json.
 
         Returns a dict with summary counts.
         """
-        papers_dir = Path(papers_dir)
+        if (papers_dir is None) == (metadata_path is None):
+            raise ValueError("Provide exactly one of papers_dir or metadata_path.")
+
+        papers_dir = Path(papers_dir) if papers_dir is not None else None
+        metadata_path = Path(metadata_path) if metadata_path is not None else None
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -80,19 +85,29 @@ class DomainExtractionWorkflow:
             self.config_generator.save(config, config_path)
             logger.info("Saved generated config to %s", config_path)
 
-        # --- step 2: scan papers_dir ----------------------------------
-        paper_paths = self._scan_papers(papers_dir)
-        if limit:
-            paper_paths = paper_paths[:limit]
-        logger.info("Found %d paper(s) to process in %s", len(paper_paths), papers_dir)
-
-        # --- step 3 + 4: parse + classify -----------------------------
+        # --- step 2 + 3 + 4: collect metadata + classify ---------------
         all_results: list[dict] = []
-        for path in tqdm(paper_paths, desc="Paper filter", unit="paper"):
-            result = self._process_one_paper(
-                path, config, dry_run=dry_run
+        if metadata_path is not None:
+            metadata_rows = self._read_jsonl(metadata_path)
+            if limit:
+                metadata_rows = metadata_rows[:limit]
+            logger.info(
+                "Found %d metadata candidate(s) to process in %s",
+                len(metadata_rows), metadata_path,
             )
-            all_results.append(result)
+            for row in tqdm(metadata_rows, desc="Paper filter", unit="paper"):
+                result = self._process_one_metadata(row, config, dry_run=dry_run)
+                all_results.append(result)
+        else:
+            paper_paths = self._scan_papers(papers_dir)
+            if limit:
+                paper_paths = paper_paths[:limit]
+            logger.info("Found %d paper(s) to process in %s", len(paper_paths), papers_dir)
+            for path in tqdm(paper_paths, desc="Paper filter", unit="paper"):
+                result = self._process_one_paper(
+                    path, config, dry_run=dry_run
+                )
+                all_results.append(result)
 
         # --- step 5: write outputs ------------------------------------
         config_path_for_summary = config_path if config_path.exists() else None
@@ -258,9 +273,14 @@ class DomainExtractionWorkflow:
 
         base: dict = {
             "source_path": str(path),
+            "source_file": "",
             "file_type": meta.file_type,
             "paper_id": meta.paper_id,
             "doi": meta.doi,
+            "pmid": "",
+            "pmcid": "",
+            "wos_uid": "",
+            "metadata_source": "local",
             "title": meta.title,
             "abstract_available": meta.abstract_available,
             "front_matter_used": meta.front_matter_used,
@@ -294,6 +314,91 @@ class DomainExtractionWorkflow:
         )
 
         # serialise CriterionResult objects to plain dicts
+        criteria_serial = {
+            name: {"answer": cr.answer, "reason": cr.reason}
+            for name, cr in decision_obj.criteria.items()
+        }
+
+        return {
+            **base,
+            "decision": decision_obj.decision,
+            "criteria": criteria_serial,
+            "reason": decision_obj.reason,
+            "model": decision_obj.model,
+            "reasoning": getattr(decision_obj, "reasoning", ""),
+        }
+
+    def _process_one_metadata(self, row: dict, config, dry_run: bool) -> dict:
+        """Classify one external metadata row, such as a WOS candidate."""
+
+        from .tools.document_parser import ArticleMeta
+
+        title = str(row.get("title", "") or "").strip()
+        abstract = str(row.get("abstract", "") or "").strip()
+        text_for_filter = str(row.get("text_for_filter", "") or abstract).strip()
+        source_path = str(row.get("source_path", "") or "")
+        source_file = str(row.get("source_file", "") or "")
+        paper_id = str(row.get("paper_id", "") or row.get("wos_uid", "") or row.get("pmid", "") or row.get("doi", "") or title[:80]).strip()
+
+        if title or text_for_filter:
+            metadata_quality = str(row.get("metadata_quality", "") or "external_metadata")
+            parse_error = ""
+        else:
+            metadata_quality = "parse_error"
+            parse_error = "No title or abstract found in metadata row"
+
+        meta = ArticleMeta(
+            source_path=Path(source_path or source_file or "."),
+            file_type="metadata",
+            title=title,
+            abstract=abstract,
+            text_for_filter=text_for_filter,
+            paper_id=paper_id,
+            doi=str(row.get("doi", "") or "").strip(),
+            abstract_available=bool(abstract or text_for_filter),
+            front_matter_used=False,
+            metadata_quality=metadata_quality,  # type: ignore[arg-type]
+            error=parse_error,
+        )
+
+        base: dict = {
+            "source_path": source_path,
+            "source_file": source_file,
+            "file_type": "metadata",
+            "paper_id": meta.paper_id,
+            "doi": meta.doi,
+            "pmid": str(row.get("pmid", "") or "").strip(),
+            "pmcid": str(row.get("pmcid", "") or "").strip(),
+            "wos_uid": str(row.get("wos_uid", "") or "").strip(),
+            "metadata_source": str(row.get("metadata_source", "") or "external"),
+            "title": meta.title,
+            "abstract_available": meta.abstract_available,
+            "front_matter_used": meta.front_matter_used,
+            "metadata_quality": meta.metadata_quality,
+        }
+
+        if meta.metadata_quality == "parse_error":
+            return {
+                **base,
+                "decision": "error",
+                "criteria": {},
+                "reason": "",
+                "model": "",
+                "error": meta.error,
+            }
+
+        if dry_run:
+            return {
+                **base,
+                "decision": "dry_run",
+                "criteria": {},
+                "reason": "dry_run mode; LLM classification skipped",
+                "model": "",
+            }
+
+        decision_obj = self.paper_filter_labeler.classify_paper(
+            meta, config.paper_filter
+        )
         criteria_serial = {
             name: {"answer": cr.answer, "reason": cr.reason}
             for name, cr in decision_obj.criteria.items()
@@ -348,17 +453,30 @@ class DomainExtractionWorkflow:
         passed = [r for r in all_results if r["decision"] == "pass"]
         rejected = [r for r in all_results if r["decision"] == "reject"]
 
+        def _select(row: dict, keys: tuple[str, ...]) -> dict:
+            return {key: row.get(key, "") for key in keys}
+
         passed_slim = [
-            {k: r[k] for k in
-             ("paper_id", "source_path", "file_type", "doi", "title",
-              "abstract_available", "metadata_quality")}
+            _select(
+                r,
+                (
+                    "paper_id", "source_path", "source_file", "file_type",
+                    "doi", "pmid", "pmcid", "wos_uid", "metadata_source",
+                    "title", "abstract_available", "metadata_quality",
+                ),
+            )
             for r in passed
         ]
         _write_jsonl(output_dir / "passed_papers.jsonl", passed_slim)
 
         rejected_slim = [
-            {k: r[k] for k in
-             ("paper_id", "source_path", "title", "criteria", "reason")}
+            _select(
+                r,
+                (
+                    "paper_id", "source_path", "source_file", "doi", "pmid",
+                    "wos_uid", "title", "criteria", "reason",
+                ),
+            )
             for r in rejected
         ]
         _write_jsonl(output_dir / "rejected_papers.jsonl", rejected_slim)

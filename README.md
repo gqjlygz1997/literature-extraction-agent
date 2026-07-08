@@ -8,6 +8,8 @@ configs.
 The current MVP supports:
 
 - paper-level filtering from title and abstract
+- Web of Science tagged-text metadata ingestion
+- DOI/PMID to PMCID lookup and PMC XML acquisition
 - JATS/XML full-text parsing
 - section-aware paragraph, abstract, and table chunking
 - embedding + regex retrieval for evidence labeling
@@ -18,9 +20,13 @@ The current MVP supports:
 ## Pipeline
 
 ```text
-user_requirements.yaml + local XML papers
+user_requirements.yaml + WOS savedrecs.txt / local XML papers
 ↓
-Paper filter
+WOS metadata ingestion (optional)
+↓
+Paper filter on title/abstract
+↓
+Full-text acquisition from pass DOI/PMID (optional)
 ↓
 Article processing
 ↓
@@ -80,11 +86,21 @@ examples/hea_mechanical_properties/user_requirements.yaml
 Run the stages separately:
 
 ```bash
-python run_paper_filter.py --requirements path/to/user_requirements.yaml --input path/to/xml_dir --output path/to/output/paper_filter
-python run_preprocess.py --input path/to/xml_dir --output path/to/output/preprocess
+python run_wos_ingest.py --input path/to/savedrecs.txt --output path/to/output/wos_ingest
+python run_paper_filter.py --requirements path/to/user_requirements.yaml --metadata path/to/output/wos_ingest/candidate_papers.jsonl --output path/to/output/paper_filter
+python run_fulltext_acquisition.py --passed path/to/output/paper_filter/passed_papers.jsonl --output path/to/output/fulltext
+python run_preprocess.py --passed path/to/output/fulltext/downloaded_papers.jsonl --output path/to/output/preprocess
 python run_labeling.py --requirements path/to/user_requirements.yaml --chunks path/to/parsed_chunks.jsonl --output path/to/output/labeling
 python run_extraction.py --requirements path/to/user_requirements.yaml --chunks path/to/parsed_chunks.jsonl --labels path/to/labeled_chunks.jsonl --output path/to/output/extraction
 python run_postprocess.py --requirements path/to/user_requirements.yaml --records path/to/extracted_records.jsonl --output path/to/output/postprocess
+```
+
+For a folder that already contains local JATS/XML files, skip WOS ingestion and
+full-text acquisition:
+
+```bash
+python run_paper_filter.py --requirements path/to/user_requirements.yaml --input path/to/xml_dir --output path/to/output/paper_filter
+python run_preprocess.py --passed path/to/output/paper_filter/passed_papers.jsonl --output path/to/output/preprocess
 ```
 
 See [Quickstart](docs/quickstart.md) for a fuller command sequence.
@@ -92,6 +108,8 @@ See [Quickstart](docs/quickstart.md) for a fuller command sequence.
 ## Main Outputs
 
 ```text
+candidate_papers.jsonl
+downloaded_papers.jsonl
 parsed_chunks.jsonl
 labeled_chunks.jsonl
 extracted_records.jsonl

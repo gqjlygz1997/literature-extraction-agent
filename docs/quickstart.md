@@ -1,7 +1,7 @@
 # Quickstart
 
 This quickstart runs the pipeline stage by stage. Paths are examples; replace
-them with your own project folder and XML corpus.
+them with your own project folder and corpus.
 
 ## 1. Install
 
@@ -32,7 +32,17 @@ examples/pancan_treatment_outcomes/user_requirements.yaml
 examples/hea_mechanical_properties/user_requirements.yaml
 ```
 
-Expected input layout:
+Input can start from either a WOS export or local JATS/XML files.
+
+WOS input layout:
+
+```text
+my_project/
+├── user_requirements.yaml
+└── savedrecs.txt
+```
+
+Local XML input layout:
 
 ```text
 my_project/
@@ -50,7 +60,34 @@ presets/<project_name>/
 
 where `<project_name>` matches the value in `user_requirements.yaml`.
 
-## 3. Paper Filter
+## 3. WOS Metadata Ingestion
+
+Skip this stage if you already have local XML files.
+
+```bash
+python run_wos_ingest.py \
+  --input my_project/savedrecs.txt \
+  --output my_project/output/wos_ingest
+```
+
+Main output:
+
+```text
+my_project/output/wos_ingest/candidate_papers.jsonl
+```
+
+## 4. Paper Filter
+
+From WOS metadata:
+
+```bash
+python run_paper_filter.py \
+  --requirements my_project/user_requirements.yaml \
+  --metadata my_project/output/wos_ingest/candidate_papers.jsonl \
+  --output my_project/output/paper_filter
+```
+
+From local XML files:
 
 ```bash
 python run_paper_filter.py \
@@ -65,11 +102,41 @@ Main output:
 my_project/output/paper_filter/passed_papers.jsonl
 ```
 
-## 4. Article Processing
+## 5. Full-Text Acquisition
+
+Use this stage after WOS-based paper filtering. It resolves pass-paper DOI/PMID
+to PMCID and downloads available PMC XML.
+
+```bash
+python run_fulltext_acquisition.py \
+  --passed my_project/output/paper_filter/passed_papers.jsonl \
+  --output my_project/output/fulltext
+```
+
+Main output:
+
+```text
+my_project/output/fulltext/downloaded_papers.jsonl
+my_project/output/fulltext/pmc_xml/
+```
+
+Skip this stage if `passed_papers.jsonl` already points to local XML files.
+
+## 6. Article Processing
+
+After WOS acquisition:
 
 ```bash
 python run_preprocess.py \
-  --input my_project/input_papers \
+  --passed my_project/output/fulltext/downloaded_papers.jsonl \
+  --output my_project/output/preprocess
+```
+
+After local XML paper filtering:
+
+```bash
+python run_preprocess.py \
+  --passed my_project/output/paper_filter/passed_papers.jsonl \
   --output my_project/output/preprocess
 ```
 
@@ -79,7 +146,7 @@ Main output:
 my_project/output/preprocess/parsed_chunks.jsonl
 ```
 
-## 5. Labeling
+## 7. Labeling
 
 ```bash
 python run_labeling.py \
@@ -94,7 +161,7 @@ Main output:
 my_project/output/labeling/labeled_chunks.jsonl
 ```
 
-## 6. Extraction
+## 8. Extraction
 
 ```bash
 python run_extraction.py \
@@ -110,7 +177,7 @@ Main output:
 my_project/output/extraction/extracted_records.jsonl
 ```
 
-## 7. Post-Processing
+## 9. Post-Processing
 
 ```bash
 python run_postprocess.py \

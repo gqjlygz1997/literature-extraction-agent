@@ -59,11 +59,15 @@ xmls/
 xml/
 pmc_xml/
 paper_xml/
+savedrecs*.txt
 
 # Pipeline intermediate/final generated files
+candidate_papers.jsonl
 paper_filter_results.jsonl
 passed_papers.jsonl
 rejected_papers.jsonl
+fulltext_acquisition_results.jsonl
+downloaded_papers.jsonl
 parsed_chunks.jsonl
 preprocessing_summary.json
 labeled_chunks.jsonl
