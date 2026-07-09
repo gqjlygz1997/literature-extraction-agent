@@ -200,14 +200,14 @@ validity:
 
 
 def test_pancan_preset_examples():
-    print("\n测试：pancan preset 临床例子")
+    print("\n测试：pancan preset drug-development 例子")
     import yaml
 
     from src.agent.user_requirements import load_user_requirements
     from src.agent.tools.postprocess import postprocess_records
 
     root = Path(__file__).parent
-    req = load_user_requirements(root / "experiments" / "pancan" / "user_requirements.yaml")
+    req = load_user_requirements(root / "examples" / "pancan_treatment_outcomes" / "user_requirements.yaml")
     with open(root / "presets" / "pancan_treatment_outcomes" / "postprocess_config.yaml", encoding="utf-8") as fh:
         config = yaml.safe_load(fh)
 
@@ -215,35 +215,37 @@ def test_pancan_preset_examples():
         {
             "paper_id": "PANCAN1",
             "record_id": "PANCAN1::r0001",
-            "patient_group": "neoadjuvant therapy group",
-            "sample_size": "n=1,234 patients",
-            "disease_stage": "stage I-III PDAC",
-            "treatment_regimen": "mFOLFIRINOX",
-            "line_of_therapy": "preoperative therapy",
-            "os": "1.5 years",
-            "pfs": "8.2 months",
-            "orr": "32%",
-            "dcr": "71.5%",
-            "hr": "HR 0.82 (95% CI 0.71-0.94)",
-            "ci": "95% CI, 0.71, 0.94",
-            "p_value": "p < 0.001",
+            "record_type": "cell assay",
+            "compound_or_treatment": "gemcitabine",
+            "model_or_population": "PANC-1 cell line",
+            "assay_or_study_type": "IC50 assay",
+            "endpoint": "half maximal inhibitory concentration",
+            "value": "0.8 uM",
+            "unit": "uM",
+            "dose": None,
+            "route": None,
+            "duration": "72 h",
+            "comparator_or_control": "vehicle",
+            "sample_size": None,
+            "statistics": "p < 0.001",
             "source_chunk_ids": ["c1"],
         },
         {
             "paper_id": "PANCAN1",
             "record_id": "PANCAN1::r0002",
-            "patient_group": "missing outcomes",
+            "record_type": None,
+            "compound_or_treatment": None,
+            "model_or_population": None,
+            "assay_or_study_type": None,
+            "endpoint": None,
+            "value": None,
+            "unit": None,
+            "dose": None,
+            "route": None,
+            "duration": None,
+            "comparator_or_control": None,
             "sample_size": None,
-            "disease_stage": None,
-            "treatment_regimen": None,
-            "line_of_therapy": None,
-            "os": None,
-            "pfs": None,
-            "orr": None,
-            "dcr": None,
-            "hr": None,
-            "ci": None,
-            "p_value": None,
+            "statistics": None,
             "source_chunk_ids": ["c2"],
         },
     ]
@@ -252,21 +254,14 @@ def test_pancan_preset_examples():
     assert len(rows) == 1
     row = rows[0]
 
-    assert row["sample_size_norm"]["value"] == 1234
-    assert row["disease_stage"] == "stage I-III"
-    assert row["treatment_regimen"] == "FOLFIRINOX"
-    assert row["line_of_therapy"] == "neoadjuvant"
-    assert row["os_norm"]["value"] == 18.0
-    assert row["os_norm"]["unit"] == "month"
-    assert row["orr_norm"]["value"] == 32.0
-    assert row["hr_norm"]["value"] == 0.82
-    assert row["hr_norm"]["unit"] == "ratio"
-    assert row["ci_norm"]["operator"] == "range"
-    assert row["ci_norm"]["value_min"] == 0.71
-    assert row["ci_norm"]["value_max"] == 0.94
-    assert row["ci_norm"]["unit"] == "ratio"
-    assert row["p_value_norm"]["operator"] == "<"
-    assert row["p_value_norm"]["value"] == 0.001
+    assert row["record_type"] == "in_vitro_efficacy"
+    assert row["endpoint"] == "IC50"
+    assert row["value_norm"]["value"] == 0.8
+    assert row["value_norm"]["unit"] == "uM"
+    assert row["duration_norm"]["value"] == 72.0
+    assert row["duration_norm"]["unit"] == "h"
+    assert row["statistics_norm"]["operator"] == "<"
+    assert row["statistics_norm"]["value"] == 0.001
     assert summary["invalid_removed"] == 1
 
     print("  ✓ pancan preset 解析和标准化正确")

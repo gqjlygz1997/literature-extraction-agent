@@ -62,15 +62,17 @@ def test_user_requirements_record_fields():
 
     from src.agent.user_requirements import load_user_requirements
 
-    req_path = Path(__file__).parent / "experiments" / "pancan" / "user_requirements.yaml"
+    req_path = Path(__file__).parent / "examples" / "pancan_treatment_outcomes" / "user_requirements.yaml"
     reqs = load_user_requirements(req_path)
 
     assert reqs.record is not None, "record block should be parsed"
-    assert reqs.record.name == "treatment_outcome_record"
+    assert reqs.record.name == "drug_development_evidence_record"
     assert reqs.target_fields == reqs.record.fields
-    assert any(field.name == "treatment_regimen" for field in reqs.target_fields)
-    assert any(field.name == "os" for field in reqs.target_fields)
-    assert "different value" in reqs.record.meaning
+    assert len(reqs.target_fields) == 13
+    assert any(field.name == "record_type" for field in reqs.target_fields)
+    assert any(field.name == "compound_or_treatment" for field in reqs.target_fields)
+    assert any(field.name == "endpoint" for field in reqs.target_fields)
+    assert "drug-development evidence" in reqs.record.meaning
 
     print("✓ user_requirements record.fields schema works correctly")
     return True

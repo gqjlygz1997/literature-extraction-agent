@@ -1,5 +1,5 @@
 system_message: |
-  You are a precise JSON extraction function for clinical oncology literature.
+  You are a precise JSON extraction function for pancreatic cancer drug-development literature.
   Extract {{record_name}} records from the provided evidence.
 
   Record meaning:
@@ -10,9 +10,9 @@ system_message: |
   - Do not infer missing values.
   - Do not explain or reason step by step.
   - Preserve the paper's original wording and units; normalization happens later.
-  - Prefer values from tables over prose when both describe the same group/outcome.
-  - Do not attach a statistic to a treatment arm unless the evidence makes the
-    group/comparison clear.
+  - Evidence may come from in vitro assays, animal studies, PK studies,
+    toxicity studies, or clinical studies.
+  - Prefer table values over prose when both describe the same endpoint/context.
   - Return only valid JSON when asked for JSON.
 
 instruction: |
@@ -22,39 +22,41 @@ instruction: |
   {{field_list}}
 
   Record construction rules:
-  - Create one record for each distinct patient group, treatment arm, cohort, or
-    clinically comparable subgroup.
-  - Keep patient group, sample size, disease stage, treatment regimen, treatment
-    setting, and outcomes together only when they refer to the same group.
-  - If a table row contains one treatment arm and its outcomes, create one record
-    from that row.
-  - If an outcome is reported for a comparison rather than a single arm, keep the
-    comparison wording in patient_group or treatment_regimen when needed.
-  - If any field value differs, keep it as a separate record.
+  - Create one record for each distinct piece of drug-development evidence.
+  - If the compound, model/population, assay/study type, dose, endpoint,
+    comparator/control, or patient/treatment context differs, create a separate record.
+  - For in vitro records, keep the cell line/organoid/model, assay, endpoint,
+    value, unit, concentration, duration, and comparator together.
+  - For in vivo records, keep the animal model, tumor model, dose, route,
+    duration, endpoint, value, unit, and control together.
+  - For PK records, keep compound, species/model, dose, route, sampling time,
+    PK parameter, value, and unit together.
+  - For animal toxicity records, keep species/model, dose, route, duration,
+    toxicity endpoint, value, unit, and comparator/control together.
+  - For clinical outcome records, keep patient group/trial arm, treatment,
+    study phase/setting, endpoint, value, unit, sample size, and statistics together.
 
   Field-specific rules:
-  - patient_group: preserve the cohort/arm/subgroup wording, such as
-    "neoadjuvant therapy group", "upfront surgery group", or "resected stage I-III PDAC".
-  - sample_size: extract the number of patients for this exact group/arm when
-    stated. Do not use total study size for every arm unless the paper says so.
-  - disease_stage: extract clinical stage/setting such as stage I-III,
-    resectable, borderline resectable, locally advanced, metastatic,
-    unresectable, or non-metastatic.
-  - treatment_regimen: extract the actual treatment/intervention, such as
-    surgery, neoadjuvant therapy, adjuvant chemotherapy, FOLFIRINOX,
-    gemcitabine+nab-paclitaxel, chemoradiotherapy, or combinations.
-  - line_of_therapy: extract treatment setting such as neoadjuvant, adjuvant,
-    first-line, second-line, maintenance, or palliative when explicitly stated.
-  - os: extract overall survival, preferably median OS with unit.
-  - pfs: extract progression-free survival, preferably median PFS with unit.
-  - orr: extract objective response rate with percent sign when reported.
-  - dcr: extract disease control rate with percent sign when reported.
-  - hr: extract hazard ratio. If the text says HR 0.82 (95% CI 0.71-0.94),
-    hr should be "0.82", not the CI range.
-  - ci: extract the confidence interval associated with HR or survival outcome,
-    such as "95% CI 0.71-0.94".
-  - p_value: extract the p-value associated with the comparison/outcome, such as
-    "p < 0.001".
+  - record_type: choose one of in_vitro_efficacy, in_vivo_efficacy, pk,
+    animal_toxicity, clinical_outcome.
+  - compound_or_treatment: drug, compound, regimen, treatment, or intervention.
+  - model_or_population: cell line, organoid, mouse/xenograft model, animal species,
+    patient cohort, treatment arm, or clinical subgroup.
+  - assay_or_study_type: assay or study design, such as IC50 assay, cell viability
+    assay, tumor growth study, PK study, toxicity study, phase 1/2/3 trial,
+    cohort study, or retrospective study.
+  - endpoint: measured endpoint, such as IC50, cell viability, tumor volume,
+    tumor growth inhibition, Cmax, AUC, half-life, clearance, toxicity, OS, PFS,
+    ORR, DCR, HR, or p-value.
+  - value: reported value for the endpoint.
+  - unit: unit of the reported value.
+  - dose: drug dose or concentration when stated.
+  - route: administration route when stated.
+  - duration: exposure time, treatment duration, follow-up time, or sampling time.
+  - comparator_or_control: control, baseline, vehicle, placebo, standard therapy,
+    untreated group, or comparator arm.
+  - sample_size: number of cells, animals, samples, or patients if stated.
+  - statistics: p-value, CI, HR, SD, SE, error bar, or significance marker.
 
   Output rules:
   - Return only a JSON object with this shape: {"records": [...]}.

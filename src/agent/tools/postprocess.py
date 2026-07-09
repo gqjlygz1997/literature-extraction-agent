@@ -415,12 +415,28 @@ def _find_range(text: str) -> tuple[float, float] | None:
 
 def _detect_unit(text: str) -> str | None:
     lowered = text.lower()
+    concentration_match = re.search(r"\b(nM|uM|µM|μM|mM)\b", text)
+    if concentration_match:
+        raw = concentration_match.group(1)
+        return {"µM": "uM", "μM": "uM"}.get(raw, raw)
+    if re.search(r"\b(ng|ug|µg|μg|mg)/m[lL]\b", text):
+        return _canonical_unit(re.search(r"\b(ng|ug|µg|μg|mg)/m[lL]\b", text).group(0))
+    if re.search(r"\b(mg|ug|µg|μg)/kg(?:/day)?\b", lowered):
+        return _canonical_unit(re.search(r"\b(mg|ug|µg|μg)/kg(?:/day)?\b", lowered).group(0))
+    if re.search(r"\bml/min/kg\b", lowered):
+        return "mL/min/kg"
     if "%" in text or re.search(r"\bpercent(age)?\b", lowered):
         return "percent"
     if re.search(r"\bmonths?\b|\bmos?\b", lowered):
         return "month"
     if re.search(r"\byears?\b|\byrs?\b", lowered):
         return "year"
+    if re.search(r"\bweeks?\b|\bwks?\b", lowered):
+        return "week"
+    if re.search(r"\bdays?\b", lowered):
+        return "day"
+    if re.search(r"\bhours?\b|\bhrs?\b|\bh\b", lowered):
+        return "h"
     if re.search(r"\bgpa\b", lowered):
         return "GPa"
     if re.search(r"\bmpa\b", lowered):
@@ -442,12 +458,26 @@ def _canonical_unit(unit: str | None) -> str | None:
     lookup = {
         "%": "percent",
         "percentage": "percent",
+        "ug/ml": "ug/mL",
+        "µg/ml": "ug/mL",
+        "μg/ml": "ug/mL",
+        "ng/ml": "ng/mL",
+        "mg/ml": "mg/mL",
+        "mg/kg/day": "mg/kg/day",
+        "ug/kg": "ug/kg",
+        "µg/kg": "ug/kg",
+        "μg/kg": "ug/kg",
         "months": "month",
         "mo": "month",
         "mos": "month",
         "years": "year",
         "yr": "year",
         "yrs": "year",
+        "weeks": "week",
+        "wks": "week",
+        "days": "day",
+        "hours": "h",
+        "hrs": "h",
         "μm": "um",
         "µm": "um",
         "micrometer": "um",

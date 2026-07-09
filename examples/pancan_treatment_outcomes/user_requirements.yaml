@@ -1,66 +1,82 @@
 project_name: pancan_treatment_outcomes
 
 domain_description: >
-  Extract treatment regimens and survival or efficacy outcomes from local
-  full-text pancreatic cancer clinical treatment papers. Focus on human clinical
-  studies such as RCTs, cohort studies, and retrospective studies. Exclude
-  reviews, mechanism-only studies, cell experiments, and animal experiments.
+  Extract pancreatic cancer drug-development evidence from full-text papers.
+  The evidence can include in vitro efficacy, in vivo efficacy,
+  pharmacokinetics, animal toxicity, and clinical outcomes. Include original
+  experimental studies and clinical studies related to pancreatic cancer drug
+  development. Exclude reviews, editorials, commentaries, papers not related to
+  pancreatic cancer, and papers without original drug-development evidence.
 
 record:
-  name: treatment_outcome_record
+  name: drug_development_evidence_record
   meaning: >
-    One record represents one patient group or treatment arm within one paper.
-    It includes the patient group, sample size, disease stage, treatment regimen,
-    treatment setting, and reported outcomes for that same group, such as OS,
-    PFS, ORR, DCR, HR, CI, and p-value. If any field listed below has a different
-    value, keep it as a separate record instead of merging it with another group
-    or treatment context.
+    One record represents one piece of pancreatic cancer drug-development
+    evidence from a paper. The evidence can come from in vitro efficacy,
+    in vivo efficacy, pharmacokinetics, animal toxicity, or clinical outcomes.
+    If the compound, model, assay, dose, endpoint, or patient/treatment context
+    changes, keep it as a separate record.
 
   fields:
-    - name: patient_group
-      definition: Patient group or trial arm, such as treatment arm, cohort, subgroup, or a specific patient population.
+    - name: record_type
+      definition: >
+        Type of evidence. Must be one of: in_vitro_efficacy, in_vivo_efficacy,
+        pk, animal_toxicity, clinical_outcome.
+      type: string
+
+    - name: compound_or_treatment
+      definition: Drug, compound, regimen, intervention, or treatment being tested.
+      type: string
+
+    - name: model_or_population
+      definition: >
+        Experimental model or clinical population, such as cell line, organoid,
+        mouse model, xenograft model, animal species, patient cohort, or trial arm.
+      type: string
+
+    - name: assay_or_study_type
+      definition: >
+        Assay or study type, such as IC50 assay, cell viability assay, apoptosis assay,
+        tumor growth study, PK study, toxicity study, phase 1 trial, phase 2 trial,
+        phase 3 trial, cohort study, or retrospective study.
+      type: string
+
+    - name: endpoint
+      definition: >
+        Measured endpoint, such as IC50, cell viability, tumor volume, tumor growth rate,
+        tumor inhibition, Cmax, AUC, half-life, clearance, toxicity, OS, PFS, ORR, DCR.
+      type: string
+
+    - name: value
+      definition: Reported value for the endpoint.
+      type: string
+
+    - name: unit
+      definition: Unit of the reported value, such as nM, uM, mg/kg, %, months, h, ng/mL.
+      type: string
+
+    - name: dose
+      definition: Drug dose or concentration if reported.
+      type: string
+
+    - name: route
+      definition: Administration route if reported, such as oral, IV, IP, SC.
+      type: string
+
+    - name: duration
+      definition: Treatment duration, exposure time, follow-up time, or sampling time.
+      type: string
+
+    - name: comparator_or_control
+      definition: Comparator, control group, baseline, vehicle, placebo, or standard treatment.
       type: string
 
     - name: sample_size
-      definition: Number of patients or sample size for this specific patient group or treatment arm.
-      type: number
-
-    - name: disease_stage
-      definition: Disease stage or clinical setting for this patient group, such as stage I-III, metastatic, locally advanced, resectable, borderline resectable, or unresectable pancreatic cancer.
+      definition: Number of cells, animals, samples, or patients if reported.
       type: string
 
-    - name: treatment_regimen
-      definition: Treatment or intervention received by this patient group, such as chemotherapy, immunotherapy, surgery, neoadjuvant therapy, adjuvant therapy, or combination treatment.
-      type: string
-
-    - name: line_of_therapy
-      definition: Line of therapy or treatment setting, such as first-line, second-line, third-line, neoadjuvant, adjuvant, 1L, or 2L.
-      type: string
-
-    - name: os
-      definition: OS = overall survival for this patient group and treatment regimen. Prefer median OS, usually reported in months.
-      type: number
-
-    - name: pfs
-      definition: PFS = progression-free survival for this patient group and treatment regimen. Prefer median PFS, usually reported in months.
-      type: number
-
-    - name: orr
-      definition: ORR = objective response rate for this patient group and treatment regimen, usually reported as a percentage.
-      type: number
-
-    - name: dcr
-      definition: DCR = disease control rate for this patient group and treatment regimen, usually reported as a percentage.
-      type: number
-
-    - name: hr
-      definition: HR = hazard ratio associated with OS, PFS, or another outcome for this patient group or comparison.
-      type: number
-
-    - name: ci
-      definition: CI = confidence interval associated with HR or survival outcome, usually a 95% CI.
-      type: string
-
-    - name: p_value
-      definition: p-value for statistical significance associated with the reported comparison or outcome.
+    - name: statistics
+      definition: >
+        Statistical information such as p-value, confidence interval, hazard ratio,
+        standard deviation, standard error, or significance marker.
       type: string

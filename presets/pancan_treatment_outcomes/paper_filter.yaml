@@ -1,68 +1,73 @@
 domain_name: pancan_treatment_outcomes
 domain_description: >
-  Extract treatment regimens and survival or efficacy outcomes from local
-  full-text pancreatic cancer clinical treatment papers. Focus on human clinical
-  studies such as RCTs, cohort studies, and retrospective studies. Exclude
-  reviews, mechanism-only studies, cell experiments, and animal experiments.
+  Extract pancreatic cancer drug-development evidence from full-text papers.
+  The evidence can include in vitro efficacy, in vivo efficacy,
+  pharmacokinetics, animal toxicity, and clinical outcomes. Include original
+  experimental studies and clinical studies related to pancreatic cancer drug
+  development. Exclude reviews, editorials, commentaries, papers not related to
+  pancreatic cancer, and papers without original drug-development evidence.
 target_fields:
-- name: patient_group
-  description: Patient group or trial arm.
+- name: record_type
+  description: Evidence type: in_vitro_efficacy, in_vivo_efficacy, pk, animal_toxicity, or clinical_outcome.
+  final_type: string
+- name: compound_or_treatment
+  description: Drug, compound, regimen, intervention, or treatment being tested.
+  final_type: string
+- name: model_or_population
+  description: Experimental model or clinical population.
+  final_type: string
+- name: assay_or_study_type
+  description: Assay or study type.
+  final_type: string
+- name: endpoint
+  description: Measured endpoint.
+  final_type: string
+- name: value
+  description: Reported endpoint value.
+  final_type: string
+- name: unit
+  description: Unit of the reported value.
+  final_type: string
+- name: dose
+  description: Drug dose or concentration.
+  final_type: string
+- name: route
+  description: Administration route.
+  final_type: string
+- name: duration
+  description: Treatment duration, exposure time, follow-up time, or sampling time.
+  final_type: string
+- name: comparator_or_control
+  description: Comparator, control group, baseline, vehicle, placebo, or standard treatment.
   final_type: string
 - name: sample_size
-  description: Number of patients or sample size.
-  final_type: number
-- name: disease_stage
-  description: Disease stage or clinical setting.
+  description: Number of cells, animals, samples, or patients.
   final_type: string
-- name: treatment_regimen
-  description: Treatment or intervention received by the group.
-  final_type: string
-- name: line_of_therapy
-  description: Line of therapy or treatment setting.
-  final_type: string
-- name: os
-  description: Overall survival.
-  final_type: number
-- name: pfs
-  description: Progression-free survival.
-  final_type: number
-- name: orr
-  description: Objective response rate.
-  final_type: number
-- name: dcr
-  description: Disease control rate.
-  final_type: number
-- name: hr
-  description: Hazard ratio.
-  final_type: number
-- name: ci
-  description: Confidence interval.
-  final_type: string
-- name: p_value
-  description: p-value.
+- name: statistics
+  description: p-value, confidence interval, hazard ratio, standard deviation, standard error, or significance marker.
   final_type: string
 paper_filter:
   input_scope: title_and_abstract
   inclusive_when_uncertain: true
   pass_condition: all_required_not_false
   criteria:
-  - name: is_pancreatic_cancer_clinical_topic
-    question: Might this paper be about human pancreatic cancer or pancreatic ductal adenocarcinoma clinical treatment rather than an unrelated disease, preclinical-only model, or mechanism-only study?
+  - name: is_pancreatic_cancer_drug_development_topic
+    question: Might this paper be about pancreatic cancer or pancreatic ductal adenocarcinoma drug development, treatment, efficacy, pharmacokinetics, toxicity, or clinical outcomes?
     expected_answer: true
-    rationale: Keep papers that may contain treatment-outcome records for pancreatic cancer. Reject clearly unrelated diseases or laboratory-only studies.
+    rationale: Keep papers related to pancreatic cancer drug-development evidence, including preclinical and clinical studies. Reject clearly unrelated diseases or topics.
     required: true
-  - name: is_original_human_study
-    question: Might this paper report original human clinical data such as a randomized trial, cohort study, registry analysis, or retrospective clinical study rather than being only a review, editorial, protocol, case report, animal study, or cell-line study?
+  - name: is_original_evidence_study
+    question: Might this paper report original experimental or clinical evidence rather than being only a review, editorial, commentary, protocol, guideline, or mechanism-only discussion without original data?
     expected_answer: true
-    rationale: The extraction target is structured clinical outcome records from human studies. Keep uncertain cases for high recall.
+    rationale: The extraction target is structured evidence records from original studies. Keep uncertain cases for high recall.
     required: true
-  - name: might_report_treatment_groups
-    question: Might this paper describe treatment arms, patient cohorts, subgroups, surgery, chemotherapy, radiotherapy, immunotherapy, targeted therapy, neoadjuvant therapy, adjuvant therapy, first-line therapy, or second-line therapy?
+  - name: might_report_drug_or_intervention_context
+    question: Might this paper describe a drug, compound, regimen, intervention, treatment, experimental model, patient group, assay, dose, or comparator relevant to pancreatic cancer drug development?
     expected_answer: true
-    rationale: Treatment/group context is required to build a treatment_outcome_record.
+    rationale: A compound/treatment plus model/population or assay/study context is needed to build a drug_development_evidence_record.
     required: true
-  - name: might_report_survival_or_response_outcomes
-    question: Might this paper report clinical outcomes such as OS, PFS, ORR, DCR, HR, CI, p-value, survival curves, response rates, or comparable efficacy endpoints?
+  - name: might_report_development_endpoint
+    question: Might this paper report an endpoint such as IC50, cell viability, apoptosis, migration, invasion, tumor volume, tumor growth inhibition, PK parameters, toxicity, OS, PFS, ORR, DCR, HR, CI, p-value, or other efficacy/safety/statistical outcome?
     expected_answer: true
-    rationale: At least one outcome/statistic is needed downstream, but title/abstract filtering should remain inclusive.
+    rationale: At least one endpoint or statistic is needed downstream, but title/abstract filtering should remain inclusive.
     required: true

@@ -1,16 +1,13 @@
 fields:
-- field_name: patient_group
-  field_definition: Patient group or trial arm, such as treatment arm, cohort, subgroup, or a specific patient population.
-  semantic_query: Patient group, treatment arm, cohort, subgroup, study population, neoadjuvant group, upfront surgery group, pancreatic cancer patients.
+- field_name: record_type
+  field_definition: Type of pancreatic cancer drug-development evidence. Must be one of in_vitro_efficacy, in_vivo_efficacy, pk, animal_toxicity, or clinical_outcome.
+  semantic_query: Determine whether the evidence is in vitro efficacy, in vivo efficacy, pharmacokinetics, animal toxicity, or clinical outcome evidence for pancreatic cancer drug development.
   regex_patterns:
-  - pattern: '\b(group|arm|cohort|subgroup|population|patients?|cases?)\b'
-    description: Patient grouping terms
+  - pattern: '\b(in[-\s]?vitro|cell[-\s]?based|cell line|organoid|xenograft|in[-\s]?vivo|mouse|mice|murine|pharmacokinetic|pharmacokinetics|PK|toxicity|toxicology|phase\s*[123I]{1,3}|clinical trial|cohort|retrospective)\b'
+    description: Evidence type indicators
     strength: strong
-  - pattern: '\b(neoadjuvant|adjuvant|upfront surgery|surgery first|resection|treated with|received)\b'
-    description: Treatment-defined group terms
-    strength: medium
-  table_header_keywords: [group, arm, cohort, subgroup, patients, n, population]
-  section_include: [abstract, methods, results, baseline, characteristics, study population, patient characteristics]
+  table_header_keywords: [assay, study, model, evidence, phase, PK, pharmacokinetics, toxicity, cohort]
+  section_include: [abstract, methods, materials, results, efficacy, pharmacokinetics, toxicity, clinical, patients]
   section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
   retrieval_settings: &retrieval_defaults
     semantic_fetch_k: 20
@@ -18,151 +15,166 @@ fields:
     table_top_k: 5
     text_top_k: 5
     rrf_k: 60
-- field_name: sample_size
-  field_definition: Number of patients or sample size for this specific patient group or treatment arm.
-  semantic_query: Sample size, number of patients, cohort size, patients included, treatment arm size, pancreatic cancer study population.
+
+- field_name: compound_or_treatment
+  field_definition: Drug, compound, regimen, intervention, or treatment being tested.
+  semantic_query: Drug, compound, treatment regimen, intervention, chemotherapy, targeted therapy, immunotherapy, nanoparticle, inhibitor, pancreatic cancer therapy being tested.
   regex_patterns:
-  - pattern: '\b(n\s*=\s*\d+|N\s*=\s*\d+|\d+\s+patients?|\d+\s+cases?)\b'
+  - pattern: '\b(gemcitabine|nab[-\s]?paclitaxel|paclitaxel|FOLFIRINOX|mFOLFIRINOX|5[-\s]?FU|fluorouracil|leucovorin|irinotecan|oxaliplatin|erlotinib|olaparib|cisplatin|capecitabine|nal[-\s]?IRI|liposomal irinotecan|inhibitor|antibody|compound|drug|agent|regimen|chemotherapy|immunotherapy|targeted therapy|nanoparticle)\b'
+    description: Drug and treatment names or classes
+    strength: strong
+  table_header_keywords: [drug, compound, treatment, regimen, therapy, intervention, agent, inhibitor, chemotherapy]
+  section_include: [abstract, methods, materials, treatment, intervention, results, efficacy, pharmacokinetics, toxicity]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+
+- field_name: model_or_population
+  field_definition: Experimental model or clinical population, such as cell line, organoid, mouse model, xenograft model, animal species, patient cohort, or trial arm.
+  semantic_query: Experimental model, pancreatic cancer cell line, organoid, xenograft, mouse model, animal species, patient cohort, trial arm, clinical population.
+  regex_patterns:
+  - pattern: '\b(PANC[-\s]?1|MIA\s*PaCa[-\s]?2|MIA[-\s]?PaCa[-\s]?2|BxPC[-\s]?3|AsPC[-\s]?1|CFPAC[-\s]?1|Capan[-\s]?[12]|SW1990|pancreatic cancer cells?|cell line|organoid|PDX|xenograft|orthotopic|mouse|mice|murine|rat|patients?|cohort|arm|population)\b'
+    description: Preclinical model and clinical population terms
+    strength: strong
+  table_header_keywords: [model, cell line, cells, organoid, xenograft, mouse, mice, patient, cohort, arm, population]
+  section_include: [abstract, methods, materials, cell culture, animal, xenograft, patients, baseline, results]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+
+- field_name: assay_or_study_type
+  field_definition: Assay or study type, such as IC50 assay, cell viability assay, apoptosis assay, tumor growth study, PK study, toxicity study, phase 1 trial, phase 2 trial, phase 3 trial, cohort study, or retrospective study.
+  semantic_query: Assay or study design including IC50 assay, viability assay, apoptosis assay, migration assay, invasion assay, tumor growth study, pharmacokinetic study, toxicity study, phase trial, cohort study.
+  regex_patterns:
+  - pattern: '\b(IC50|MTT|CCK[-\s]?8|cell viability|apoptosis|colony formation|wound healing|migration|invasion|Transwell|tumou?r growth|tumou?r volume|PK study|pharmacokinetic study|toxicity study|phase\s*[123I]{1,3}|clinical trial|cohort study|retrospective study)\b'
+    description: Assay and study type terms
+    strength: strong
+  table_header_keywords: [assay, study type, method, IC50, viability, apoptosis, migration, invasion, PK, toxicity, phase]
+  section_include: [abstract, methods, materials, assays, pharmacokinetics, toxicity, results, clinical]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+
+- field_name: endpoint
+  field_definition: Measured endpoint, such as IC50, cell viability, tumor volume, tumor growth inhibition, Cmax, AUC, half-life, clearance, toxicity, OS, PFS, ORR, DCR.
+  semantic_query: Measured endpoint or outcome such as IC50, viability, apoptosis, tumor volume, tumor growth inhibition, Cmax, AUC, half-life, clearance, toxicity, overall survival, progression-free survival, response rate.
+  regex_patterns:
+  - pattern: '\b(IC50|GI50|EC50|cell viability|viability|apoptosis|migration|invasion|tumou?r volume|tumou?r weight|tumou?r growth|TGI|growth inhibition|Cmax|Tmax|AUC|half[-\s]?life|t1/2|clearance|toxicity|adverse events?|overall survival|OS|progression[-\s]?free survival|PFS|objective response rate|ORR|disease control rate|DCR|hazard ratio|HR|p[-\s]?value)\b'
+    description: Endpoint and outcome terms
+    strength: strong
+  table_header_keywords: [endpoint, outcome, IC50, viability, tumor volume, Cmax, AUC, toxicity, OS, PFS, ORR, DCR, p-value]
+  section_include: [abstract, results, efficacy, pharmacokinetics, toxicity, survival, outcomes, response]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+
+- field_name: value
+  field_definition: Reported value for the endpoint.
+  semantic_query: Numeric result value for a pancreatic cancer drug-development endpoint, including concentration, percentage, survival duration, PK parameter, tumor measurement, toxicity value, or statistical result.
+  regex_patterns:
+  - pattern: '\b\d+(?:\.\d+)?\s*(?:nM|uM|mM|ng/mL|ug/mL|mg/mL|mg/kg|mg/kg/day|%|percent|months?|weeks?|days?|hours?|h|min|mL/min/kg)\b'
+    description: Numeric values with biomedical units
+    strength: strong
+  - pattern: '\b(?:p|P)\s*[<=>]\s*0?\.\d+\b'
+    description: p-value expressions
+    strength: medium
+  table_header_keywords: [value, result, mean, median, concentration, percent, months, nM, uM, mg/kg]
+  section_include: [abstract, results, tables, efficacy, pharmacokinetics, toxicity, survival, outcomes]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+
+- field_name: unit
+  field_definition: Unit of the reported value, such as nM, uM, mg/kg, percent, months, h, ng/mL.
+  semantic_query: Units for reported endpoint values, including concentration units, dose units, time units, percentage units, survival time units, and pharmacokinetic units.
+  regex_patterns:
+  - pattern: '\b(nM|uM|mM|ng/mL|ug/mL|mg/mL|mg/kg|mg/kg/day|%|percent|months?|weeks?|days?|hours?|h|min|mL/min/kg|L/h/kg)\b'
+    description: Biomedical units
+    strength: strong
+  table_header_keywords: [unit, nM, uM, mg/kg, percent, months, h, ng/mL, AUC]
+  section_include: [abstract, results, tables, methods, pharmacokinetics, toxicity, survival]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+
+- field_name: dose
+  field_definition: Drug dose or concentration if reported.
+  semantic_query: Drug dose, concentration, administered dose, treatment dose, exposure concentration, dosing schedule, mg/kg, micromolar concentration.
+  regex_patterns:
+  - pattern: '\b\d+(?:\.\d+)?\s*(?:nM|uM|mM|ng/mL|ug/mL|mg/mL|mg/kg|mg/kg/day|mg|ug|g)\b'
+    description: Dose and concentration expressions
+    strength: strong
+  - pattern: '\b(dose|dosage|concentration|treated with|administered|received|once daily|twice daily|q\d+d)\b'
+    description: Dose context terms
+    strength: medium
+  table_header_keywords: [dose, dosage, concentration, treatment, mg/kg, uM, nM, administered]
+  section_include: [methods, materials, treatment, dosing, pharmacokinetics, toxicity, results]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+
+- field_name: route
+  field_definition: Administration route if reported, such as oral, IV, IP, SC.
+  semantic_query: Drug administration route including oral, intravenous, intraperitoneal, subcutaneous, intratumoral, injection, gavage, infusion.
+  regex_patterns:
+  - pattern: '\b(oral|orally|PO|p\.o\.|intravenous|IV|i\.v\.|intraperitoneal|IP|i\.p\.|subcutaneous|SC|s\.c\.|intratumou?ral|gavage|injection|infusion)\b'
+    description: Administration route terms
+    strength: strong
+  table_header_keywords: [route, administration, oral, IV, IP, SC, injection, gavage]
+  section_include: [methods, materials, treatment, dosing, pharmacokinetics, toxicity, animal]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+
+- field_name: duration
+  field_definition: Treatment duration, exposure time, follow-up time, or sampling time.
+  semantic_query: Duration, exposure time, treatment duration, follow-up time, sampling time, incubation period, days, hours, weeks, months.
+  regex_patterns:
+  - pattern: '\b\d+(?:\.\d+)?\s*(?:min|minutes?|h|hours?|days?|weeks?|months?|years?)\b'
+    description: Time duration expressions
+    strength: strong
+  - pattern: '\b(duration|exposure|incubated|treated for|follow[-\s]?up|sampling time|time point)\b'
+    description: Duration context terms
+    strength: medium
+  table_header_keywords: [duration, time, exposure, follow-up, sampling, day, hour, week, month]
+  section_include: [methods, materials, treatment, dosing, pharmacokinetics, toxicity, results, follow-up]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+
+- field_name: comparator_or_control
+  field_definition: Comparator, control group, baseline, vehicle, placebo, or standard treatment.
+  semantic_query: Comparator or control group including vehicle, untreated control, placebo, baseline, standard therapy, gemcitabine control, treatment comparison arm.
+  regex_patterns:
+  - pattern: '\b(control|vehicle|untreated|placebo|baseline|standard of care|SOC|compared with|versus|vs\.?|comparator|gemcitabine alone|saline)\b'
+    description: Comparator and control terms
+    strength: strong
+  table_header_keywords: [control, comparator, vehicle, placebo, baseline, versus, vs, treatment arm]
+  section_include: [abstract, methods, materials, treatment, results, tables, baseline]
+  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
+  retrieval_settings: *retrieval_defaults
+
+- field_name: sample_size
+  field_definition: Number of cells, animals, samples, or patients if reported.
+  semantic_query: Sample size, number of cells, number of animals, number of mice, number of samples, number of patients, cohort size, enrollment.
+  regex_patterns:
+  - pattern: '\b(n\s*=\s*\d+|N\s*=\s*\d+|\d+\s+(?:cells?|animals?|mice|rats|samples?|patients?|cases?))\b'
     description: Sample size expressions
     strength: strong
-  - pattern: '\b(total of|included|enrolled|identified|collected|analyzed)\b'
-    description: Enrollment and cohort size context
+  - pattern: '\b(enrolled|included|collected|analyzed|randomized|assigned)\b'
+    description: Enrollment and sample context
     strength: medium
-  table_header_keywords: [n, N, patients, cases, sample size, number, total]
-  section_include: [abstract, methods, results, baseline, characteristics, study population, patient characteristics]
+  table_header_keywords: [n, N, sample size, cells, animals, mice, patients, cases, cohort]
+  section_include: [abstract, methods, materials, animal, patients, baseline, results]
   section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
   retrieval_settings: *retrieval_defaults
-- field_name: disease_stage
-  field_definition: Disease stage or clinical setting for this patient group, such as stage I-III, metastatic, locally advanced, resectable, borderline resectable, or unresectable pancreatic cancer.
-  semantic_query: Disease stage, clinical stage, resectable pancreatic cancer, borderline resectable, locally advanced, metastatic, non-metastatic PDAC.
+
+- field_name: statistics
+  field_definition: Statistical information such as p-value, confidence interval, hazard ratio, standard deviation, standard error, or significance marker.
+  semantic_query: Statistical information including p-value, confidence interval, hazard ratio, standard deviation, standard error, significance marker, log-rank test, error bars.
   regex_patterns:
-  - pattern: '\b(stage\s*(?:I|II|III|IV|1|2|3|4)(?:\s*[-–]\s*(?:I|II|III|IV|1|2|3|4))?|metastatic|non[-\s]?metastatic|locally advanced|borderline resectable|resectable|unresectable|PDAC)\b'
-    description: Disease stage and clinical setting terms
+  - pattern: '\b(p\s*[<=>]\s*0?\.\d+|P\s*[<=>]\s*0?\.\d+|p[-\s]?value|95\s*%\s*CI|confidence interval|hazard ratio|HR|standard deviation|SD|standard error|SE|SEM|significant|log[-\s]?rank)\b'
+    description: Statistical terms and values
     strength: strong
-  table_header_keywords: [stage, metastatic, resectable, locally advanced, borderline, unresectable, PDAC]
-  section_include: [abstract, methods, results, baseline, characteristics, eligibility, study population]
+  - pattern: '\*{1,4}'
+    description: Significance star markers
+    strength: weak
+  table_header_keywords: [p, p-value, CI, HR, SD, SE, SEM, significance, log-rank]
+  section_include: [abstract, results, tables, statistics, survival, outcomes, efficacy, toxicity]
   section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
   retrieval_settings: *retrieval_defaults
-- field_name: treatment_regimen
-  field_definition: Treatment or intervention received by this patient group, such as chemotherapy, immunotherapy, surgery, neoadjuvant therapy, adjuvant therapy, or combination treatment.
-  semantic_query: Treatment regimen, chemotherapy, FOLFIRINOX, gemcitabine, nab-paclitaxel, surgery, resection, neoadjuvant therapy, adjuvant therapy, chemoradiotherapy.
-  regex_patterns:
-  - pattern: '\b(FOLFIRINOX|mFOLFIRINOX|gemcitabine|nab[-\s]?paclitaxel|GnP|AG|capecitabine|erlotinib|cisplatin|nal[-\s]?IRI|5[-\s]?FU|leucovorin|chemotherapy|radiotherapy|chemoradiotherapy|immunotherapy|targeted therapy|surgery|resection)\b'
-    description: Pancreatic cancer treatment terms
-    strength: strong
-  - pattern: '\b(neoadjuvant|adjuvant|upfront|preoperative|postoperative|first[-\s]?line|second[-\s]?line|maintenance|palliative)\b'
-    description: Treatment setting terms
-    strength: medium
-  table_header_keywords: [treatment, regimen, therapy, chemotherapy, surgery, FOLFIRINOX, gemcitabine, nab-paclitaxel]
-  section_include: [abstract, methods, treatment, intervention, results, baseline, patient characteristics]
-  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
-  retrieval_settings: *retrieval_defaults
-- field_name: line_of_therapy
-  field_definition: Line of therapy or treatment setting, such as first-line, second-line, third-line, neoadjuvant, adjuvant, 1L, or 2L.
-  semantic_query: Line of therapy, first-line treatment, second-line treatment, neoadjuvant therapy, adjuvant therapy, maintenance therapy, palliative therapy.
-  regex_patterns:
-  - pattern: '\b(first[-\s]?line|1L|1st line|second[-\s]?line|2L|2nd line|third[-\s]?line|3L|neoadjuvant|neo[-\s]?adjuvant|adjuvant|maintenance|palliative|preoperative|postoperative)\b'
-    description: Therapy line and setting terms
-    strength: strong
-  table_header_keywords: [line, setting, neoadjuvant, adjuvant, first-line, second-line, 1L, 2L]
-  section_include: [abstract, methods, treatment, intervention, results]
-  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
-  retrieval_settings: *retrieval_defaults
-- field_name: os
-  field_definition: OS = overall survival for this patient group and treatment regimen. Prefer median OS, usually reported in months.
-  semantic_query: Overall survival, OS, median overall survival, mOS, survival outcome, months, pancreatic cancer treatment outcome.
-  regex_patterns:
-  - pattern: '\b(overall survival|OS|mOS|median OS|median overall survival)\b'
-    description: Overall survival terms
-    strength: strong
-  - pattern: '\b\d+(?:\.\d+)?\s*(?:months?|mos?|years?|yrs?)\b'
-    description: Survival duration values
-    strength: medium
-  table_header_keywords: [OS, overall survival, median OS, mOS, survival, months]
-  section_include: [abstract, results, survival, outcomes, efficacy, discussion]
-  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
-  retrieval_settings: *retrieval_defaults
-- field_name: pfs
-  field_definition: PFS = progression-free survival for this patient group and treatment regimen. Prefer median PFS, usually reported in months.
-  semantic_query: Progression-free survival, PFS, median PFS, mPFS, disease-free survival, recurrence-free survival, months.
-  regex_patterns:
-  - pattern: '\b(progression[-\s]?free survival|PFS|mPFS|median PFS|disease[-\s]?free survival|DFS|recurrence[-\s]?free survival|RFS)\b'
-    description: PFS and related survival endpoint terms
-    strength: strong
-  - pattern: '\b\d+(?:\.\d+)?\s*(?:months?|mos?|years?|yrs?)\b'
-    description: Survival duration values
-    strength: medium
-  table_header_keywords: [PFS, progression-free survival, median PFS, mPFS, DFS, RFS, months]
-  section_include: [abstract, results, survival, outcomes, efficacy, discussion]
-  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
-  retrieval_settings: *retrieval_defaults
-- field_name: orr
-  field_definition: ORR = objective response rate for this patient group and treatment regimen, usually reported as a percentage.
-  semantic_query: Objective response rate, ORR, response rate, complete response, partial response, tumor response percentage.
-  regex_patterns:
-  - pattern: '\b(objective response rate|ORR|overall response rate|response rate|complete response|partial response|CR|PR)\b'
-    description: Objective response terms
-    strength: strong
-  - pattern: '\b\d+(?:\.\d+)?\s*%\b'
-    description: Percentage values
-    strength: medium
-  table_header_keywords: [ORR, objective response, response rate, CR, PR, "%"]
-  section_include: [abstract, results, response, outcomes, efficacy]
-  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
-  retrieval_settings: *retrieval_defaults
-- field_name: dcr
-  field_definition: DCR = disease control rate for this patient group and treatment regimen, usually reported as a percentage.
-  semantic_query: Disease control rate, DCR, disease control, stable disease, response outcome percentage.
-  regex_patterns:
-  - pattern: '\b(disease control rate|DCR|disease control|stable disease|SD)\b'
-    description: Disease control terms
-    strength: strong
-  - pattern: '\b\d+(?:\.\d+)?\s*%\b'
-    description: Percentage values
-    strength: medium
-  table_header_keywords: [DCR, disease control, stable disease, SD, "%"]
-  section_include: [abstract, results, response, outcomes, efficacy]
-  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
-  retrieval_settings: *retrieval_defaults
-- field_name: hr
-  field_definition: HR = hazard ratio associated with OS, PFS, or another outcome for this patient group or comparison.
-  semantic_query: Hazard ratio, HR, Cox regression, multivariable analysis, survival comparison, prognostic factor.
-  regex_patterns:
-  - pattern: '\b(hazard ratio|HR|Cox|multivariable|univariable|proportional hazards)\b'
-    description: Hazard ratio and survival model terms
-    strength: strong
-  - pattern: '\bHR\s*[=:]?\s*\d+(?:\.\d+)?\b'
-    description: Explicit HR value
-    strength: strong
-  table_header_keywords: [HR, hazard ratio, Cox, univariate, multivariate, multivariable]
-  section_include: [abstract, results, survival, multivariate, multivariable, prognostic, cox, discussion]
-  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
-  retrieval_settings: *retrieval_defaults
-- field_name: ci
-  field_definition: CI = confidence interval associated with HR or survival outcome, usually a 95% CI.
-  semantic_query: Confidence interval, 95% CI, confidence limits, hazard ratio confidence interval, survival estimate interval.
-  regex_patterns:
-  - pattern: '\b(95\s*%\s*CI|confidence interval|CI)\b'
-    description: Confidence interval terms
-    strength: strong
-  - pattern: '\b\d+(?:\.\d+)?\s*[-–,]\s*\d+(?:\.\d+)?\b'
-    description: Confidence interval numeric range
-    strength: medium
-  table_header_keywords: [CI, 95% CI, confidence interval, lower, upper]
-  section_include: [abstract, results, survival, multivariate, multivariable, prognostic, cox, discussion]
-  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
-  retrieval_settings: *retrieval_defaults
-- field_name: p_value
-  field_definition: p-value for statistical significance associated with the reported comparison or outcome.
-  semantic_query: P-value, statistical significance, p < 0.05, log-rank test, comparison significance, survival difference.
-  regex_patterns:
-  - pattern: '\b(p\s*[<=>]\s*0?\.\d+|P\s*[<=>]\s*0?\.\d+|p-value|P-value|log[-\s]?rank)\b'
-    description: P-value and significance terms
-    strength: strong
-  table_header_keywords: [p, p-value, P value, significance, log-rank]
-  section_include: [abstract, results, survival, outcomes, efficacy, table, discussion]
-  section_exclude: [references, acknowledgement, acknowledgements, funding, conflict]
-  retrieval_settings: *retrieval_defaults
+
 embedding:
   model: gemini-embedding-001
   provider: gemini
