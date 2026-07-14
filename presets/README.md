@@ -25,6 +25,20 @@ an extra LLM binary relevance check over retrieved top-k chunks.
 For pancreatic cancer, labeling uses only core evidence-locator fields; final
 extraction still follows all fields in `user_requirements.yaml`.
 
+`paper_filter.yaml` supports `uncertain_policy` on each required criterion:
+`pass` keeps uncertain papers for recall, while `reject` requires explicit
+evidence for a critical domain condition.
+
+`extraction_prompt.yaml` can define `endpoint_constraints` for a domain. In
+strict mode, it permits only configured endpoint/record-type pairs and
+canonicalizes configured aliases. Without this block, extraction is
+unrestricted.
+
+The pancan preset uses these rules to keep intervention-linked drug-development
+evidence and reject clearly biomarker-only or prognostic papers. Its
+post-processing config requires `record_type`, `compound_or_treatment`,
+`model_or_population`, and `endpoint` for a final record.
+
 Priority:
 
 ```text

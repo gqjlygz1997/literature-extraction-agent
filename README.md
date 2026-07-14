@@ -6,7 +6,9 @@ moved into `user_requirements.yaml` and optional preset files so that the same
 engineering pipeline can be reused across biomedical and materials-science
 tasks.
 
-The current MVP has been tested on pancreatic cancer treatment-outcome papers.
+The current MVP includes a pancreatic-cancer preset for drug-development
+evidence: in-vitro efficacy, in-vivo efficacy, pharmacokinetics, animal
+toxicity, and clinical outcomes.
 
 ## What It Does
 
@@ -24,7 +26,7 @@ Full-text acquisition: DOI/PMID → PMCID → PMC XML
 ↓
 Article processing: section-aware paragraph and table chunks
 ↓
-Labeling: find evidence chunks for each target field
+Labeling: semantic + regex retrieval to find evidence chunks
 ↓
 Extraction: contextualized JSON-schema record extraction
 ↓
@@ -55,6 +57,11 @@ If a preset exists, it is used directly. If not, the system falls back to
 DSPy/LLM generation or generic defaults. This keeps stable domains close to
 ALLMAT-style engineered prompts while still allowing new domains to be
 bootstrapped.
+
+The pancan preset is intentionally stricter than the generic fallback: it
+rejects papers that are clearly biomarker-only, diagnostic, prognostic, or
+risk-factor studies without intervention-linked evidence, while retaining
+genuinely ambiguous treatment papers for recall.
 
 ## Setup
 
@@ -161,6 +168,22 @@ extracted_records.jsonl                raw structured records
 postprocessed_records.jsonl
 records.csv                            analysis-ready table
 *_summary.json                         stage summaries and errors
+```
+
+For the pancan preset, `extraction_summary.json` also reports records rejected
+by record-type/endpoint constraints. This makes it possible to audit whether a
+domain endpoint list is too narrow without storing verbose retrieval traces.
+
+## Verification
+
+The repository includes focused no-LLM tests for WOS ingestion, paper-filter
+policy, extraction helpers, and post-processing:
+
+```bash
+python test_wos_metadata_basic.py
+python test_paper_filter_basic.py
+python test_extraction_basic.py
+python test_postprocess_basic.py
 ```
 
 ## Repository Map

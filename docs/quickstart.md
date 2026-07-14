@@ -36,7 +36,9 @@ NCBI_EMAIL=your_email@example.com
 
 `NCBI_EMAIL` is optional but recommended for polite NCBI/PMC metadata requests.
 WOS parsing and article preprocessing do not call an LLM, but paper filtering,
-labeling, and extraction do.
+and extraction do. Labeling uses retrieval only by default in the pancan preset;
+enable its optional LLM confirmation only when stricter chunk filtering is worth
+the additional cost.
 
 ## 2. Prepare Inputs
 
@@ -117,6 +119,11 @@ Main output:
 my_project/output/paper_filter/passed_papers.jsonl
 ```
 
+For the pancreatic-cancer preset, papers that are clearly biomarker-only,
+diagnostic, prognostic, or risk-factor studies are rejected before full-text
+acquisition. Ambiguous papers are retained for recall; clearly irrelevant
+papers lack intervention-linked evidence and are rejected.
+
 ## 5. Full-Text Acquisition
 
 Use this stage after WOS-based paper filtering. It resolves pass-paper DOI/PMID
@@ -192,6 +199,10 @@ Main output:
 my_project/output/extraction/extracted_records.jsonl
 ```
 
+Some domain prompt presets also apply local constraints after extraction. The
+pancan preset only keeps endpoints compatible with the selected evidence type,
+for example `clearance` for `pk` rather than `clinical_outcome`.
+
 ## 9. Post-Processing
 
 ```bash
@@ -214,3 +225,5 @@ my_project/output/postprocess/records.csv
 - Local XML/PDF papers should stay outside git.
 - Presets are source files and should be committed.
 - `.env` files should never be committed.
+- Use a new output directory for every batch run to preserve previous generated
+  artifacts.

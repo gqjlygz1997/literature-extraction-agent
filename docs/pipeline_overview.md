@@ -64,6 +64,12 @@ run_summary.json
 This follows the ALLMAT idea of title/abstract-level paper classification, but
 makes the filter configurable for non-HEA domains.
 
+Criteria are normally recall-oriented: an `uncertain` answer passes unless the
+criterion sets `uncertain_policy: reject`. The pancreatic-cancer preset uses a
+specific intervention-evidence criterion to reject clearly biomarker-only,
+diagnostic, prognostic, and risk-factor studies before full-text download while
+still retaining genuinely ambiguous treatment papers for later inspection.
+
 ## 2. Full-Text Acquisition
 
 When paper filtering starts from WOS metadata, only passed papers are resolved
@@ -127,7 +133,7 @@ embed parsed chunks into a Chroma vector store
 apply section exclude/include rules
 retrieve Text/Table candidates with semantic + regex signals
 rank candidates with RRF
-use DSPy/LLM to confirm relevant top-k chunks
+optionally use DSPy/LLM to confirm relevant top-k chunks
 merge labels by chunk_id
 ```
 
@@ -150,6 +156,10 @@ Each output row is chunk-centric:
 }
 ```
 
+`labeling_strategy.llm_binary_confirm` controls the optional confirmation
+step. It defaults to `false` in the pancan preset, so retrieved top-k chunks are
+used directly for faster large-batch labeling.
+
 ## 5. Extraction
 
 Extraction uses contextualized extraction only in the MVP. It collects relevant
@@ -164,6 +174,7 @@ generate JSON schema from user_requirements.yaml
 use extraction_prompt.yaml preset if available
 otherwise generate prompt dynamically
 call LLM for contextualized structured extraction
+apply optional record-type/endpoint constraints from the prompt preset
 deduplicate records, fill missing fields, and preserve source chunk ids
 ```
 
@@ -172,6 +183,10 @@ Main output:
 ```text
 extracted_records.jsonl
 ```
+
+When a preset enables strict endpoint constraints, canonicalize/filtering is
+performed before deduplication. `extraction_summary.json` reports rejected
+record-type/endpoint combinations by paper and in total.
 
 ## 6. Post-Processing
 
@@ -185,7 +200,7 @@ otherwise use generic defaults
 normalize numeric fields
 standardize domain terms with preset dictionaries
 filter invalid records
-deduplicate and mark conflicts where applicable
+strictly deduplicate records
 export JSONL and CSV
 ```
 
@@ -218,5 +233,6 @@ Deferred:
 ALLMAT-style DetectProcesses/template injection
 advanced entity resolution
 downstream ML dataset construction
+cross-run database / batch management
 large-scale evaluation
 ```
