@@ -437,6 +437,8 @@ def _detect_unit(text: str) -> str | None:
         return "day"
     if re.search(r"\bhours?\b|\bhrs?\b|\bh\b", lowered):
         return "h"
+    if re.search(r"\bmin(utes?|s)?\b", lowered):
+        return "min"
     if re.search(r"\bgpa\b", lowered):
         return "GPa"
     if re.search(r"\bmpa\b", lowered):
@@ -478,6 +480,9 @@ def _canonical_unit(unit: str | None) -> str | None:
         "days": "day",
         "hours": "h",
         "hrs": "h",
+        "minute": "min",
+        "minutes": "min",
+        "mins": "min",
         "μm": "um",
         "µm": "um",
         "micrometer": "um",

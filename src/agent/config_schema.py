@@ -27,6 +27,7 @@ class PaperFilterCriterion:
     expected_answer: bool = True
     rationale: str = ""
     required: bool = True
+    uncertain_policy: Literal["pass", "reject"] = "pass"
 
 
 @dataclass(frozen=True)

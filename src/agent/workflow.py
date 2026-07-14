@@ -560,7 +560,6 @@ class DomainExtractionWorkflow:
             TableHeaderRetriever,
             RRFFusion,
         )
-        from .tools.dspy_evidence_labeler import EvidenceLabeler
 
         requirements_path = Path(requirements_path)
         parsed_chunks_path = Path(parsed_chunks_path)
@@ -665,9 +664,23 @@ class DomainExtractionWorkflow:
         logger.info("\n[Step 4] Initializing retrievers and labeler...")
 
         semantic_retriever = SemanticRetriever(vectorstore)
-        evidence_labeler = EvidenceLabeler(vector_builder)
+        llm_binary_confirm_default = self._labeling_llm_binary_confirm_default(
+            labeling_config
+        )
+        uses_llm_binary_confirm = any(
+            self._field_llm_binary_confirm(field, llm_binary_confirm_default)
+            for field in labeling_config["fields"]
+        )
+        if uses_llm_binary_confirm:
+            from .tools.dspy_evidence_labeler import EvidenceLabeler
+            evidence_labeler = EvidenceLabeler(vector_builder)
+        else:
+            evidence_labeler = None
 
-        logger.info("✓ Retrievers and labeler ready")
+        logger.info(
+            "✓ Retrievers ready; LLM binary confirmation: %s",
+            "enabled" if uses_llm_binary_confirm else "disabled",
+        )
 
         # ========== Step 5: 对每篇论文、每个字段进行标注 ==========
         logger.info("\n[Step 5] Labeling chunks...")
@@ -695,6 +708,7 @@ class DomainExtractionWorkflow:
                     semantic_retriever=semantic_retriever,
                     vector_builder=vector_builder,
                     evidence_labeler=evidence_labeler,
+                    llm_binary_confirm_default=llm_binary_confirm_default,
                 )
 
                 # 仅保留 relevant=true 的记录，附带 paper_id / field_name
@@ -750,6 +764,7 @@ class DomainExtractionWorkflow:
         semantic_retriever,
         vector_builder,
         evidence_labeler,
+        llm_binary_confirm_default: bool = False,
     ) -> list[dict]:
         """
         双通道处理：text channel + table channel
@@ -788,6 +803,9 @@ class DomainExtractionWorkflow:
 
         all_labeled = []
         settings = field_config["retrieval_settings"]
+        llm_binary_confirm = self._field_llm_binary_confirm(
+            field_config, llm_binary_confirm_default
+        )
 
         # ========== A. Text Channel ==========
         text_chunks = [
@@ -845,16 +863,25 @@ class DomainExtractionWorkflow:
                 f"Regex: {len(regex_results)} → RRF top-{len(text_top_k)}"
             )
 
-            # LLM 二分类
+            # Optional LLM 二分类；默认关闭时直接保留 retrieval top-k。
             if text_top_k:
-                labeled_text = evidence_labeler.label_candidates(
-                    field_config=field_config,
-                    candidates=text_top_k,
-                    channel="text"
-                )
+                if llm_binary_confirm:
+                    labeled_text = evidence_labeler.label_candidates(
+                        field_config=field_config,
+                        candidates=text_top_k,
+                        channel="text"
+                    )
+                else:
+                    labeled_text = self._mark_candidates_relevant(
+                        text_top_k, channel="text"
+                    )
                 all_labeled.extend(labeled_text)
                 relevant_count = sum(1 for x in labeled_text if x["relevant"])
-                logger.info(f"        Labeled: {relevant_count}/{len(labeled_text)} relevant")
+                label_mode = "LLM-confirmed" if llm_binary_confirm else "retrieval-only"
+                logger.info(
+                    f"        Labeled ({label_mode}): "
+                    f"{relevant_count}/{len(labeled_text)} relevant"
+                )
 
         # ========== B. Table Channel ==========
         table_chunks = [
@@ -976,35 +1003,36 @@ class DomainExtractionWorkflow:
             rrf_ids = {item["chunk_id"] for item in rrf_ranked}
 
             if len(table_chunks) <= table_top_k:
-                # 表格少：全部送 LLM，但要补全未被检索命中的 table
-                # 已在 RRF 中的表格保留原始信号；未命中的追加，source=table_all，rrf_score=0
+                # 表格少：如果有 LLM 审核，可以全送；retrieval-only 时只保留有检索信号的表格。
                 table_candidates = list(rrf_ranked)  # 已有信号的排在前面
 
-                next_rank = len(table_candidates) + 1
-                for chunk in table_chunks:
-                    if chunk["chunk_id"] not in rrf_ids:
-                        table_candidates.append({
-                            "chunk_id": chunk["chunk_id"],
-                            "paper_id": chunk["paper_id"],
-                            "chunk_type": "table",
-                            "section_path_text": " > ".join(chunk.get("section_path", [])),
-                            "rrf_score": 0.0,
-                            "hybrid_rank": next_rank,
-                            "sources": ["table_all"],
-                            "semantic_rank": None,
-                            "semantic_similarity": None,
-                            "regex_rank": None,
-                            "regex_score": None,
-                            "matched_patterns": [],
-                            "table_rank": None,
-                            "table_score": None,
-                            "matched_keywords": [],
-                        })
-                        next_rank += 1
+                if llm_binary_confirm:
+                    next_rank = len(table_candidates) + 1
+                    for chunk in table_chunks:
+                        if chunk["chunk_id"] not in rrf_ids:
+                            table_candidates.append({
+                                "chunk_id": chunk["chunk_id"],
+                                "paper_id": chunk["paper_id"],
+                                "chunk_type": "table",
+                                "section_path_text": " > ".join(chunk.get("section_path", [])),
+                                "rrf_score": 0.0,
+                                "hybrid_rank": next_rank,
+                                "sources": ["table_all"],
+                                "semantic_rank": None,
+                                "semantic_similarity": None,
+                                "regex_rank": None,
+                                "regex_score": None,
+                                "matched_patterns": [],
+                                "table_rank": None,
+                                "table_score": None,
+                                "matched_keywords": [],
+                            })
+                            next_rank += 1
 
                 logger.info(
                     f"        Table count ({len(table_chunks)}) ≤ table_top_k ({table_top_k}): "
-                    f"labeling all {len(table_candidates)} tables "
+                    f"{'labeling all' if llm_binary_confirm else 'retrieval-only'} "
+                    f"{len(table_candidates)} tables "
                     f"({len(rrf_ranked)} with signals, {len(table_candidates) - len(rrf_ranked)} appended)"
                 )
             else:
@@ -1015,18 +1043,69 @@ class DomainExtractionWorkflow:
                     f"RRF top-{len(table_candidates)}"
                 )
 
-            # --- 步骤 4：LLM 二分类 ---
+            # --- 步骤 4：Optional LLM 二分类 ---
             if table_candidates:
-                labeled_tables = evidence_labeler.label_candidates(
-                    field_config=field_config,
-                    candidates=table_candidates,
-                    channel="table"
-                )
+                if llm_binary_confirm:
+                    labeled_tables = evidence_labeler.label_candidates(
+                        field_config=field_config,
+                        candidates=table_candidates,
+                        channel="table"
+                    )
+                else:
+                    labeled_tables = self._mark_candidates_relevant(
+                        table_candidates, channel="table"
+                    )
                 all_labeled.extend(labeled_tables)
                 relevant_count = sum(1 for x in labeled_tables if x["relevant"])
-                logger.info(f"        Labeled: {relevant_count}/{len(labeled_tables)} relevant")
+                label_mode = "LLM-confirmed" if llm_binary_confirm else "retrieval-only"
+                logger.info(
+                    f"        Labeled ({label_mode}): "
+                    f"{relevant_count}/{len(labeled_tables)} relevant"
+                )
 
         return all_labeled
+
+    @staticmethod
+    def _labeling_llm_binary_confirm_default(config: dict) -> bool:
+        """Return the global default for optional LLM binary confirmation."""
+
+        strategy = config.get("labeling_strategy") or {}
+        if "llm_binary_confirm" in strategy:
+            return bool(strategy["llm_binary_confirm"])
+        labeler = config.get("labeler") or {}
+        if "llm_binary_confirm" in labeler:
+            return bool(labeler["llm_binary_confirm"])
+        return False
+
+    @staticmethod
+    def _field_llm_binary_confirm(
+        field_config: dict,
+        default: bool = False,
+    ) -> bool:
+        """Allow field-level override while keeping the global default light."""
+
+        if "llm_binary_confirm" in field_config:
+            return bool(field_config["llm_binary_confirm"])
+        settings = field_config.get("retrieval_settings") or {}
+        if "llm_binary_confirm" in settings:
+            return bool(settings["llm_binary_confirm"])
+        return default
+
+    @staticmethod
+    def _mark_candidates_relevant(
+        candidates: list[dict],
+        channel: str,
+    ) -> list[dict]:
+        """Label retrieval candidates as relevant without calling an LLM."""
+
+        return [
+            {
+                **candidate,
+                "relevant": True,
+                "retrieval_channel": channel,
+            }
+            for candidate in candidates
+        ]
 
     @staticmethod
     def _aggregate_labeled_chunks(
@@ -1208,6 +1287,7 @@ class DomainExtractionWorkflow:
         from .tools.context_builder import build_context
         from .tools.extractor import extract_records
         from .tools.record_cleanup import deduplicate, assign_ids_and_source
+        from .tools.endpoint_constraints import build_endpoint_constraint
 
         requirements_path   = Path(requirements_path)
         parsed_chunks_path  = Path(parsed_chunks_path)
@@ -1255,6 +1335,18 @@ class DomainExtractionWorkflow:
                     str(prompt_data["instruction"]), req.record
                 )
 
+        # Load endpoint constraints (optional, strict mode for pancan preset)
+        endpoint_constraint = None
+        if prompt_preset:
+            import yaml
+            with open(prompt_preset, encoding="utf-8") as fh:
+                prompt_data = yaml.safe_load(fh) or {}
+            endpoint_constraint = build_endpoint_constraint(
+                prompt_data.get("endpoint_constraints")
+            )
+            if endpoint_constraint:
+                logger.info("  Endpoint constraints: strict mode enabled")
+
         # ── Step 2: 加载 chunks ──
         logger.info("\n[Step 2] Loading chunks...")
         all_parsed  = self._read_jsonl(parsed_chunks_path)
@@ -1290,6 +1382,7 @@ class DomainExtractionWorkflow:
                     "records_raw": 0,
                     "records_after_cleanup": 0,
                     "duplicates_removed": 0,
+                    "endpoint_constraint_rejected": 0,
                     "context_chunks_used": 0,
                 }
                 continue
@@ -1299,10 +1392,21 @@ class DomainExtractionWorkflow:
             )
             logger.info(f"    Status: {status}, raw: {len(raw_records)}")
 
+            # Canonicalize/filter endpoint pairs before deduplication, so aliases
+            # such as "overall survival" and "OS" collapse to one record.
+            constraint_rejected = 0
+            constraint_stats = {}
+            if endpoint_constraint:
+                raw_records, constraint_stats = endpoint_constraint.apply(raw_records)
+                constraint_rejected = constraint_stats.get("endpoint_constraint_rejected", 0)
+                if constraint_rejected > 0:
+                    logger.info(f"    Endpoint constraints rejected: {constraint_rejected}")
+
             deduped, n_removed = deduplicate(raw_records, field_names)
+
             cleaned = assign_ids_and_source(deduped, paper_id, field_names, used_ids)
 
-            logger.info(f"    Cleaned: {len(cleaned)} ({n_removed} removed)")
+            logger.info(f"    Cleaned: {len(cleaned)} ({n_removed} dedup removed)")
 
             total_removed += n_removed
             all_records.extend(cleaned)
@@ -1311,6 +1415,10 @@ class DomainExtractionWorkflow:
                 "records_raw": len(raw_records),
                 "records_after_cleanup": len(cleaned),
                 "duplicates_removed": n_removed,
+                "endpoint_constraint_rejected": constraint_rejected,
+                "endpoint_constraint_rejected_by_combo": constraint_stats.get(
+                    "endpoint_constraint_rejected_by_combo", {}
+                ),
                 "context_chunks_used": len(used_ids),
             }
 
@@ -1321,6 +1429,17 @@ class DomainExtractionWorkflow:
         logger.info(f"  ✓ {len(all_records)} records")
 
         import os as _os
+        total_constraint_rejected = sum(
+            v.get("endpoint_constraint_rejected", 0) for v in by_paper.values()
+        )
+        total_constraint_rejected_by_combo: dict[str, int] = {}
+        for paper_summary in by_paper.values():
+            for combo, count in paper_summary.get(
+                "endpoint_constraint_rejected_by_combo", {}
+            ).items():
+                total_constraint_rejected_by_combo[combo] = (
+                    total_constraint_rejected_by_combo.get(combo, 0) + count
+                )
         summary = {
             "total_papers_processed": len(paper_ids),
             "total_papers_failed": sum(
@@ -1328,6 +1447,8 @@ class DomainExtractionWorkflow:
             ),
             "total_records_extracted": len(all_records),
             "duplicates_removed": total_removed,
+            "endpoint_constraint_rejected": total_constraint_rejected,
+            "endpoint_constraint_rejected_by_combo": total_constraint_rejected_by_combo,
             "by_paper": by_paper,
             "extractor_model": (
                 model_name

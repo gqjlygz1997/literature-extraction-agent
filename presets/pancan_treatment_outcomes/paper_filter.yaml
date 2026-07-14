@@ -8,7 +8,7 @@ domain_description: >
   pancreatic cancer, and papers without original drug-development evidence.
 target_fields:
 - name: record_type
-  description: Evidence type: in_vitro_efficacy, in_vivo_efficacy, pk, animal_toxicity, or clinical_outcome.
+  description: "Evidence type: in_vitro_efficacy, in_vivo_efficacy, pk, animal_toxicity, or clinical_outcome."
   final_type: string
 - name: compound_or_treatment
   description: Drug, compound, regimen, intervention, or treatment being tested.
@@ -61,11 +61,27 @@ paper_filter:
     expected_answer: true
     rationale: The extraction target is structured evidence records from original studies. Keep uncertain cases for high recall.
     required: true
-  - name: might_report_drug_or_intervention_context
-    question: Might this paper describe a drug, compound, regimen, intervention, treatment, experimental model, patient group, assay, dose, or comparator relevant to pancreatic cancer drug development?
+  - name: has_eligible_intervention_evidence
+    question: >
+      Does the title or abstract explicitly report a drug, compound, regimen, or
+      other therapeutic intervention being evaluated in pancreatic cancer, with
+      an effect/outcome tied to that intervention or to a clearly defined
+      treatment cohort? Answer false for pure biomarker, diagnostic, prognostic,
+      target-discovery, or mechanistic studies, even when they mention drugs,
+      survival, treatment history, or a potential therapeutic target. Also answer
+      false when treatment is only a background patient characteristic rather
+      than the intervention evidence being studied.
+      Answer true when the abstract explicitly reports a drug/intervention effect,
+      including preclinical treatment studies embedded in mechanistic work (for
+      example, a drug suppresses a tumor phenotype or sensitizes a model to another
+      therapy). Answer uncertain only when the title/abstract is genuinely insufficient.
     expected_answer: true
-    rationale: A compound/treatment plus model/population or assay/study context is needed to build a drug_development_evidence_record.
+    rationale: >
+      A record must link an evaluated intervention, or a clearly defined treatment
+      cohort, to an outcome. Biomarker-only prognostic associations do not fit the
+      five supported drug-development evidence types.
     required: true
+    uncertain_policy: pass
   - name: might_report_development_endpoint
     question: Might this paper report an endpoint such as IC50, cell viability, apoptosis, migration, invasion, tumor volume, tumor growth inhibition, PK parameters, toxicity, OS, PFS, ORR, DCR, HR, CI, p-value, or other efficacy/safety/statistical outcome?
     expected_answer: true

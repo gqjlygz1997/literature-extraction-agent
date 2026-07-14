@@ -35,6 +35,22 @@ def test_parse_numeric_value():
     assert grain["value"] == 0.5
     assert grain["unit"] == "um"
 
+    # 测试分钟时间单位识别
+    duration_min = parse_numeric_value("20 min")
+    assert duration_min["value"] == 20.0
+    assert duration_min["unit"] == "min"
+    assert duration_min["operator"] == "eq"
+
+    duration_minutes = parse_numeric_value("15 minutes")
+    assert duration_minutes["value"] == 15.0
+    assert duration_minutes["unit"] == "min"
+    assert duration_minutes["operator"] == "eq"
+
+    # 确认已有测试：72 h 保持 h 单位
+    duration_hours = parse_numeric_value("72 h")
+    assert duration_hours["value"] == 72.0
+    assert duration_hours["unit"] == "h"
+
     print("  ✓ 数值解析正确")
     return True
 
@@ -231,8 +247,28 @@ def test_pancan_preset_examples():
             "source_chunk_ids": ["c1"],
         },
         {
+            # 只有 compound_or_treatment / endpoint，缺少 record_type / model_or_population
+            # required_all 下应被过滤
             "paper_id": "PANCAN1",
             "record_id": "PANCAN1::r0002",
+            "record_type": None,
+            "compound_or_treatment": "erlotinib",
+            "model_or_population": None,
+            "assay_or_study_type": None,
+            "endpoint": "cell viability",
+            "value": None,
+            "unit": None,
+            "dose": None,
+            "route": None,
+            "duration": None,
+            "comparator_or_control": None,
+            "sample_size": None,
+            "statistics": None,
+            "source_chunk_ids": ["c2"],
+        },
+        {
+            "paper_id": "PANCAN1",
+            "record_id": "PANCAN1::r0003",
             "record_type": None,
             "compound_or_treatment": None,
             "model_or_population": None,
@@ -262,7 +298,11 @@ def test_pancan_preset_examples():
     assert row["duration_norm"]["unit"] == "h"
     assert row["statistics_norm"]["operator"] == "<"
     assert row["statistics_norm"]["value"] == 0.001
-    assert summary["invalid_removed"] == 1
+    # r0002（缺 record_type / model_or_population）和 r0003（全空）都应被 required_all 过滤
+    assert summary["invalid_removed"] == 2
+    kept_ids = {r["record_id"] for r in rows}
+    assert "PANCAN1::r0002" not in kept_ids
+    assert "PANCAN1::r0003" not in kept_ids
 
     print("  ✓ pancan preset 解析和标准化正确")
     return True

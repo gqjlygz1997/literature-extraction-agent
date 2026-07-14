@@ -183,6 +183,7 @@ Return JSON matching this schema exactly:
                         "expected_answer": c.expected_answer,
                         "rationale": c.rationale,
                         "required": c.required,
+                        "uncertain_policy": c.uncertain_policy,
                     }
                     for c in config.paper_filter.criteria
                 ],
@@ -218,6 +219,7 @@ Return JSON matching this schema exactly:
                 expected_answer=c.get("expected_answer", True),
                 rationale=c.get("rationale", ""),
                 required=c.get("required", True),
+                uncertain_policy=c.get("uncertain_policy", "pass"),
             )
             for c in pf_raw.get("criteria", [])
         ]
@@ -286,6 +288,7 @@ Return JSON matching this schema exactly:
                 # Generated paper-filter criteria are gates, not optional notes.
                 # Reuse configs can still encode optional criteria via load().
                 required=True,
+                uncertain_policy="pass",
             ))
 
         if not result:

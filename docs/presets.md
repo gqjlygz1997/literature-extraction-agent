@@ -23,6 +23,10 @@ extraction_prompt.yaml
 postprocess_config.yaml
 ```
 
+For labeling presets, `labeling_strategy.llm_binary_confirm: false` keeps
+labeling fast by using retrieval results directly. Change it to `true` if a
+domain needs stricter LLM confirmation.
+
 The pipeline uses presets before generating anything with DSPy/LLM:
 
 ```text

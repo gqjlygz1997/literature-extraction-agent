@@ -18,6 +18,13 @@ extraction_prompt.yaml   # skips dynamic extraction prompt generation
 postprocess_config.yaml  # controls numeric parsing, standardization, filtering
 ```
 
+In `labeling_config.yaml`, `labeling_strategy.llm_binary_confirm` defaults to
+`false` for faster retrieval-only labeling. Set it to `true` only when you want
+an extra LLM binary relevance check over retrieved top-k chunks.
+
+For pancreatic cancer, labeling uses only core evidence-locator fields; final
+extraction still follows all fields in `user_requirements.yaml`.
+
 Priority:
 
 ```text

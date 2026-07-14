@@ -12,6 +12,8 @@ system_message: |
   - Preserve the paper's original wording and units; normalization happens later.
   - Evidence may come from in vitro assays, animal studies, PK studies,
     toxicity studies, or clinical studies.
+  - Only extract records that fit one of the allowed record_type values.
+    Do not force unrelated evidence into the closest allowed category.
   - Prefer table values over prose when both describe the same endpoint/context.
   - Return only valid JSON when asked for JSON.
 
@@ -23,6 +25,25 @@ instruction: |
 
   Record construction rules:
   - Create one record for each distinct piece of drug-development evidence.
+  - Skip evidence that does not fit one of these record_type values:
+    in_vitro_efficacy, in_vivo_efficacy, pk, animal_toxicity, clinical_outcome.
+  - Skip formulation or delivery-system characterization when it is not directly
+    reporting efficacy, PK, toxicity, or clinical outcome evidence. Examples to
+    skip include standalone encapsulation efficiency, drug loading, release
+    profile, particle size, zeta potential, pH, and formulation stability.
+  - Do not create a record if the only endpoint is treatment administration,
+    treatment exposure, treatment assignment, or therapy received.
+  - Every record needs a direct intervention-to-evidence relationship: the
+    compound_or_treatment must be the intervention being evaluated, or must
+    explicitly define the treatment cohort whose outcome is reported.
+  - Do not create a drug-development record for biomarker, gene, protein,
+    diagnostic, or prognostic associations. In particular, reject comparisons
+    such as high-versus-low biomarker expression, mutation status, or disease
+    stage when treatment is only background information rather than the studied
+    intervention or the defining treatment cohort.
+  - Do not turn a list of historical/preoperative/postoperative therapies into
+    compound_or_treatment unless the evidence explicitly reports an outcome for
+    that regimen or compares it with another treatment regimen.
   - If the compound, model/population, assay/study type, dose, endpoint,
     comparator/control, or patient/treatment context differs, create a separate record.
   - For in vitro records, keep the cell line/organoid/model, assay, endpoint,
@@ -45,9 +66,22 @@ instruction: |
   - assay_or_study_type: assay or study design, such as IC50 assay, cell viability
     assay, tumor growth study, PK study, toxicity study, phase 1/2/3 trial,
     cohort study, or retrospective study.
-  - endpoint: measured endpoint, such as IC50, cell viability, tumor volume,
-    tumor growth inhibition, Cmax, AUC, half-life, clearance, toxicity, OS, PFS,
-    ORR, DCR, HR, or p-value.
+  - endpoint: IMPORTANT — Select endpoint based on record_type:
+      * For in_vitro_efficacy, use: IC50, IC90, cell viability, cell proliferation,
+        cytotoxicity, apoptosis, colony formation, migration, invasion, cell cycle arrest.
+      * For in_vivo_efficacy, use: tumor volume, tumor weight, tumor growth,
+        tumor growth inhibition, tumor burden, survival, metastasis.
+      * For pk, use: Cmax, Tmax, AUC, half-life, clearance, bioavailability,
+        volume of distribution.
+      * For animal_toxicity, use: body weight change, mortality, clinical signs,
+        hematology, clinical chemistry, histopathology, organ toxicity.
+      * For clinical_outcome, use: OS, PFS, ORR, DCR, response rate,
+        duration of response, disease progression, adverse events.
+      If the evidence's endpoint does not fit the record_type's allowed endpoints,
+      do NOT create a record. Do not force-fit an endpoint into the wrong record_type.
+      HR, CI, p-value, SD, SE belong in the statistics field, not endpoint.
+      Do not use preoperative therapy, postoperative therapy, treatment administered,
+      treatment received, or treatment used as an endpoint.
   - value: reported value for the endpoint.
   - unit: unit of the reported value.
   - dose: drug dose or concentration when stated.
@@ -62,3 +96,91 @@ instruction: |
   - Return only a JSON object with this shape: {"records": [...]}.
   - Use null for fields not explicitly stated.
   - Preserve original wording and units.
+
+endpoint_constraints:
+  mode: strict
+  by_record_type:
+    in_vitro_efficacy:
+      - IC50
+      - IC90
+      - cell viability
+      - cell proliferation
+      - cytotoxicity
+      - apoptosis
+      - colony formation
+      - migration
+      - invasion
+      - cell cycle arrest
+    in_vivo_efficacy:
+      - tumor volume
+      - tumor weight
+      - tumor growth
+      - tumor growth inhibition
+      - tumor burden
+      - survival
+      - metastasis
+    pk:
+      - Cmax
+      - Tmax
+      - AUC
+      - half-life
+      - clearance
+      - bioavailability
+      - volume of distribution
+    animal_toxicity:
+      - body weight change
+      - mortality
+      - clinical signs
+      - hematology
+      - clinical chemistry
+      - histopathology
+      - organ toxicity
+    clinical_outcome:
+      - OS
+      - PFS
+      - ORR
+      - DCR
+      - response rate
+      - duration of response
+      - disease progression
+      - adverse events
+  aliases:
+    OS:
+      - overall survival
+      - median overall survival
+      - median OS
+    PFS:
+      - progression-free survival
+      - progression free survival
+      - median PFS
+      - median progression-free survival
+    ORR:
+      - objective response rate
+      - overall response rate
+    DCR:
+      - disease control rate
+    IC50:
+      - half maximal inhibitory concentration
+      - half-maximal inhibitory concentration
+    IC90:
+      - 90% inhibitory concentration
+    AUC:
+      - area under the curve
+      - area under curve
+    Cmax:
+      - maximum concentration
+      - peak concentration
+    Tmax:
+      - time to maximum concentration
+    clearance:
+      - CL
+      - drug clearance
+    tumor growth inhibition:
+      - TGI
+      - growth inhibition
+      - anti-tumor effect
+      - anti-tumour effect
+      - antitumor effect
+    bioavailability:
+      - oral bioavailability
+      - F

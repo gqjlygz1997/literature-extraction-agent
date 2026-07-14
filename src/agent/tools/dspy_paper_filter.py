@@ -31,10 +31,10 @@ if dspy is not None:
         pass an early-stage relevance filter for a structured data extraction project.
 
         RULES:
-        - Prioritise recall. Answer "uncertain" (not "false") when you are not sure.
+        - Evaluate each criterion independently. Answer "uncertain" (not "false") when you are not sure.
         - Answer "false" ONLY when highly confident the criterion is NOT met.
-        - "uncertain" is treated as pass (inclusive by default).
-        - Evaluate each criterion independently.
+        - Each criterion includes an uncertain_policy. The pipeline, not you, decides
+          whether uncertainty passes or rejects.
         """
 
         paper_text: str = dspy.InputField(
@@ -169,6 +169,7 @@ class DSPyPaperFilter:
                 "name": c.name,
                 "question": c.question,
                 "required": c.required,
+                "uncertain_policy": c.uncertain_policy,
             }
             for c in required_criteria
         ]
@@ -229,10 +230,23 @@ class DSPyPaperFilter:
         Returns (decision, reason_string).
         Reuses logic from LLMLabeler.
         """
+        criterion_by_name = {
+            criterion.name: criterion
+            for criterion in paper_filter_config.criteria
+            if criterion.required
+        }
         rejected_by: list[str] = []
         for name, result in criteria_results.items():
             if result.answer == "false":
                 rejected_by.append(f"{name}: {result.reason}")
+            elif (
+                result.answer == "uncertain"
+                and criterion_by_name.get(name, None) is not None
+                and criterion_by_name[name].uncertain_policy == "reject"
+            ):
+                rejected_by.append(
+                    f"{name}: insufficient evidence for a required strict criterion"
+                )
 
         if rejected_by:
             return "reject", "Rejected because: " + "; ".join(rejected_by)

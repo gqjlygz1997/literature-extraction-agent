@@ -71,8 +71,8 @@ standardize:
       intratumoral: [intratumoral, intra-tumoral]
 
 validity:
-  required_any:
-    - endpoint
-    - value
+  required_all:
+    - record_type
     - compound_or_treatment
-    - assay_or_study_type
+    - model_or_population
+    - endpoint

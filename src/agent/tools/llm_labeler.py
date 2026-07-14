@@ -126,7 +126,8 @@ class LLMLabeler:
         answer "uncertain" rather than "false".
         """
         criteria_lines = "\n".join(
-            f'  - name: "{c.name}"\n    question: "{c.question}"'
+            f'  - name: "{c.name}"\n    question: "{c.question}"\n'
+            f'    uncertain_policy: "{c.uncertain_policy}"'
             for c in paper_filter_config.criteria
             if c.required
         )
@@ -160,13 +161,14 @@ class LLMLabeler:
         return f"""You are a scientific literature classifier. Your task is to evaluate whether
 a paper is relevant for a structured data extraction project.
 
-IMPORTANT RULES:
-- This is an early-stage coarse filter. Prioritise recall: do NOT reject papers
-  when you are unsure.
-- Answer "uncertain" (not "false") whenever the title/text does not provide
-  enough information to make a confident negative judgement.
-- Answer "false" only when you are highly confident the paper does NOT satisfy
-  a criterion.{quality_note}
+        IMPORTANT RULES:
+        - Evaluate every criterion independently.
+        - Answer "uncertain" (not "false") whenever the title/text does not provide
+          enough information to make a confident negative judgement.
+        - Answer "false" only when you are highly confident the paper does NOT satisfy
+          a criterion.
+        - Each criterion declares an uncertain_policy. The pipeline decides whether
+          uncertainty passes or rejects; do not change your answer to influence that policy.{quality_note}
 
 Evaluate the following criteria for the paper below:
 
@@ -258,10 +260,23 @@ Return JSON matching this schema exactly (no extra keys):
 
         Returns (decision, reason_string).
         """
+        criterion_by_name = {
+            criterion.name: criterion
+            for criterion in paper_filter_config.criteria
+            if criterion.required
+        }
         rejected_by: list[str] = []
         for name, result in criteria_results.items():
             if result.answer == "false":
                 rejected_by.append(f"{name}: {result.reason}")
+            elif (
+                result.answer == "uncertain"
+                and criterion_by_name.get(name, None) is not None
+                and criterion_by_name[name].uncertain_policy == "reject"
+            ):
+                rejected_by.append(
+                    f"{name}: insufficient evidence for a required strict criterion"
+                )
 
         if rejected_by:
             return "reject", "Rejected because: " + "; ".join(rejected_by)
