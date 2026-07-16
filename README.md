@@ -138,6 +138,17 @@ controls how many unfinished papers move through the expensive stages.
   --limit 10
 ```
 
+The repository also includes the pancan WOS index files used for the example
+run:
+
+```bash
+.venv/bin/python run_pipeline.py \
+  --requirements examples/pancan_treatment_outcomes/user_requirements.yaml \
+  --wos examples/pancan_treatment_outcomes/wos_savedrecs \
+  --output outputs/pancan \
+  --limit 10
+```
+
 `records.csv` is rewritten by the final post-processing stage from all current
 postprocessed records. It is not a per-batch CSV and it is not blindly appended
 line by line.

@@ -67,6 +67,12 @@ my_project/
 └── savedrecs.txt
 ```
 
+For the pancan example, the repository already includes WOS index files:
+
+```text
+examples/pancan_treatment_outcomes/wos_savedrecs/
+```
+
 Local XML input layout:
 
 ```text
@@ -109,6 +115,16 @@ From WOS savedrecs/index files:
   --requirements my_project/user_requirements.yaml \
   --wos my_project/savedrecs.txt \
   --output my_project/outputs \
+  --limit 10
+```
+
+Bundled pancan example:
+
+```bash
+.venv/bin/python run_pipeline.py \
+  --requirements examples/pancan_treatment_outcomes/user_requirements.yaml \
+  --wos examples/pancan_treatment_outcomes/wos_savedrecs \
+  --output outputs/pancan \
   --limit 10
 ```
 

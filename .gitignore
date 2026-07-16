@@ -61,6 +61,10 @@ pmc_xml/
 paper_xml/
 savedrecs*.txt
 
+# Keep bundled example WOS index files for reproducible pancan runs.
+!examples/pancan_treatment_outcomes/wos_savedrecs/
+!examples/pancan_treatment_outcomes/wos_savedrecs/savedrecs*.txt
+
 # Pipeline intermediate/final generated files
 candidate_papers.jsonl
 paper_filter_results.jsonl
