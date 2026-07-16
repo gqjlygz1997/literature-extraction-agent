@@ -100,6 +100,31 @@ same output directory + --limit 10 = run the next 10 unfinished papers
 - If you change prompts, presets, model settings, or parsed input, use
   `--force` for the affected downstream stage.
 
+For normal use, run the whole pipeline with one command.
+
+From WOS savedrecs/index files:
+
+```bash
+.venv/bin/python run_pipeline.py \
+  --requirements my_project/user_requirements.yaml \
+  --wos my_project/savedrecs.txt \
+  --output my_project/outputs \
+  --limit 10
+```
+
+From local XML files:
+
+```bash
+.venv/bin/python run_pipeline.py \
+  --requirements my_project/user_requirements.yaml \
+  --xml my_project/input_papers \
+  --output my_project/outputs \
+  --limit 10
+```
+
+The stage-by-stage commands below are mainly for debugging or rerunning one
+specific stage.
+
 ## 3. WOS Metadata Ingestion
 
 Skip this stage if you already have local XML files.

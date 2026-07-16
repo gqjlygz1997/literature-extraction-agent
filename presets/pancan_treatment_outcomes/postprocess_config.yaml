@@ -75,3 +75,6 @@ validity:
     - compound_or_treatment
     - model_or_population
     - endpoint
+    - value
+  required_numeric_all:
+    - value

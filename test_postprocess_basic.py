@@ -51,6 +51,14 @@ def test_parse_numeric_value():
     assert duration_hours["value"] == 72.0
     assert duration_hours["unit"] == "h"
 
+    hazard_ratio = parse_numeric_value("0.63 HR")
+    assert hazard_ratio["value"] == 0.63
+    assert hazard_ratio["unit"] == "ratio"
+
+    hazard_ratio_words = parse_numeric_value("0.43 hazard ratio")
+    assert hazard_ratio_words["value"] == 0.43
+    assert hazard_ratio_words["unit"] == "ratio"
+
     reported_range = parse_numeric_value("17.1 (0.6-61.9) months")
     assert reported_range["operator"] == "reported_with_range"
     assert reported_range["value"] == 17.1
@@ -70,6 +78,7 @@ def test_parse_numeric_value():
     assert dose["unit"] == "mg/m2"
 
     assert parse_numeric_value("liver 7 (33%), lung 2 (10%)") is None
+    assert parse_numeric_value("grade 1 hypertension") is None
 
     print("  ✓ 数值解析正确")
     return True
@@ -268,7 +277,7 @@ def test_pancan_preset_examples():
             "source_chunk_ids": ["c1"],
         },
         {
-            # 只有 compound_or_treatment / endpoint，缺少 record_type / model_or_population
+            # 只有 compound_or_treatment / endpoint，缺少 record_type / model_or_population / value
             # required_all 下应被过滤
             "paper_id": "PANCAN1",
             "record_id": "PANCAN1::r0002",
@@ -288,8 +297,65 @@ def test_pancan_preset_examples():
             "source_chunk_ids": ["c2"],
         },
         {
+            # 有基本身份字段，但没有 outcome value，也应从最终表中过滤
             "paper_id": "PANCAN1",
             "record_id": "PANCAN1::r0003",
+            "record_type": "clinical_outcome",
+            "compound_or_treatment": "FOLFIRINOX",
+            "model_or_population": "patients with pancreatic cancer",
+            "assay_or_study_type": "clinical study",
+            "endpoint": "OS",
+            "value": None,
+            "unit": None,
+            "dose": None,
+            "route": None,
+            "duration": None,
+            "comparator_or_control": None,
+            "sample_size": "42",
+            "statistics": None,
+            "source_chunk_ids": ["c3"],
+        },
+        {
+            # 定性疗效描述不能进入最终数值表
+            "paper_id": "PANCAN1",
+            "record_id": "PANCAN1::r0004",
+            "record_type": "clinical_outcome",
+            "compound_or_treatment": "camrelizumab",
+            "model_or_population": "pancreatic cancer patient",
+            "assay_or_study_type": "case report",
+            "endpoint": "PFS",
+            "value": "prolonged",
+            "unit": None,
+            "dose": "200 mg",
+            "route": "intravenous",
+            "duration": None,
+            "comparator_or_control": "chemotherapy alone",
+            "sample_size": "1",
+            "statistics": None,
+            "source_chunk_ids": ["c4"],
+        },
+        {
+            # 毒性 grade 本身不是 endpoint 数值
+            "paper_id": "PANCAN1",
+            "record_id": "PANCAN1::r0005",
+            "record_type": "clinical_outcome",
+            "compound_or_treatment": "camrelizumab",
+            "model_or_population": "pancreatic cancer patient",
+            "assay_or_study_type": "case report",
+            "endpoint": "adverse events",
+            "value": "grade 1 hypertension",
+            "unit": None,
+            "dose": "200 mg",
+            "route": "intravenous",
+            "duration": None,
+            "comparator_or_control": None,
+            "sample_size": "1",
+            "statistics": None,
+            "source_chunk_ids": ["c5"],
+        },
+        {
+            "paper_id": "PANCAN1",
+            "record_id": "PANCAN1::r0006",
             "record_type": None,
             "compound_or_treatment": None,
             "model_or_population": None,
@@ -318,11 +384,16 @@ def test_pancan_preset_examples():
     assert row["duration_norm"]["value"] == 72.0
     assert row["duration_norm"]["unit"] == "h"
     assert "statistics_norm" not in row
-    # r0002（缺 record_type / model_or_population）和 r0003（全空）都应被 required_all 过滤
-    assert summary["invalid_removed"] == 2
+    # r0002（缺身份字段/value）、r0003（缺 value）、r0004（定性 value）、
+    # r0005（只有 toxicity grade）、r0006（全空）都应被过滤
+    assert summary["invalid_removed"] == 5
+    assert summary["invalid_numeric_removed"] == 2
     kept_ids = {r["record_id"] for r in rows}
     assert "PANCAN1::r0002" not in kept_ids
     assert "PANCAN1::r0003" not in kept_ids
+    assert "PANCAN1::r0004" not in kept_ids
+    assert "PANCAN1::r0005" not in kept_ids
+    assert "PANCAN1::r0006" not in kept_ids
 
     print("  ✓ pancan preset 解析和标准化正确")
     return True

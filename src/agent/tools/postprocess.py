@@ -156,6 +156,8 @@ def parse_numeric_value(
         }
 
     number_count = len(_measurement_numbers(text))
+    if _only_numeric_content_is_toxicity_grade(text):
+        return None
     range_match = _find_range(text) if parse_ranges else None
     if range_match:
         if not allow_multiple_numbers and number_count != 2:
@@ -278,12 +280,14 @@ def postprocess_records(
     validity_cfg = config.get("validity") or {}
     required_all = list(validity_cfg.get("required_all") or [])
     required_any = list(validity_cfg.get("required_any") or field_names)
+    required_numeric_all = list(validity_cfg.get("required_numeric_all") or [])
     null_values = DEFAULT_NULL_VALUES | {
         str(v).lower() for v in (config.get("null_values") or [])
     }
 
     cleaned_rows: list[dict[str, Any]] = []
     invalid_removed = 0
+    invalid_numeric_removed = 0
     numeric_parsed = 0
     standardized_values = 0
 
@@ -337,6 +341,10 @@ def postprocess_records(
         if not _is_valid(row, required_all, required_any):
             invalid_removed += 1
             continue
+        if not _has_required_numeric_values(row, required_numeric_all):
+            invalid_removed += 1
+            invalid_numeric_removed += 1
+            continue
 
         cleaned_rows.append(row)
 
@@ -347,6 +355,7 @@ def postprocess_records(
         "records_after_validation": len(cleaned_rows),
         "records_output": len(deduped_rows),
         "invalid_removed": invalid_removed,
+        "invalid_numeric_removed": invalid_numeric_removed,
         "duplicates_removed": duplicates_removed,
         "numeric_values_parsed": numeric_parsed,
         "standardized_values": standardized_values,
@@ -486,8 +495,31 @@ def _measurement_numbers(text: str) -> list[str]:
     return matches
 
 
+def _only_numeric_content_is_toxicity_grade(text: str) -> bool:
+    """Avoid treating toxicity grades as numeric outcome values."""
+    if "%" in text or re.search(r"\bpercent(age)?\b", text, flags=re.I):
+        return False
+
+    numbers = _measurement_numbers(text)
+    if not numbers:
+        return False
+
+    grade_numbers: list[str] = []
+    grade_re = re.compile(
+        r"\bgrade\s+"
+        rf"({NUMBER_RE.pattern}(?:\s*(?:or|/|-|to)\s*{NUMBER_RE.pattern})*)",
+        flags=re.I,
+    )
+    for match in grade_re.finditer(text):
+        grade_numbers.extend(NUMBER_RE.findall(match.group(1)))
+
+    return bool(grade_numbers) and sorted(numbers) == sorted(grade_numbers)
+
+
 def _detect_unit(text: str) -> str | None:
     lowered = text.lower()
+    if re.search(r"\bhazard\s+ratio\b", lowered) or re.search(r"\bHR\b", text):
+        return "ratio"
     concentration_match = re.search(r"\b(nM|uM|µM|μM|mM)\b", text)
     if concentration_match:
         raw = concentration_match.group(1)
@@ -574,6 +606,10 @@ def _canonical_unit(unit: str | None) -> str | None:
         "°c": "C",
     }
     raw = str(unit).strip()
+    if raw == "HR":
+        return "ratio"
+    if raw.lower() == "hazard ratio":
+        return "ratio"
     return lookup.get(raw.lower(), raw)
 
 
@@ -626,6 +662,14 @@ def _is_valid(row: dict[str, Any], required_all: list[str], required_any: list[s
             not _is_empty(row.get(field)) or not _is_empty(row.get(f"{field}_norm"))
             for field in required_any
         )
+    return True
+
+
+def _has_required_numeric_values(row: dict[str, Any], required_numeric_all: list[str]) -> bool:
+    for field in required_numeric_all:
+        norm = row.get(f"{field}_norm")
+        if not isinstance(norm, dict) or norm.get("value") is None or norm.get("error"):
+            return False
     return True
 
 

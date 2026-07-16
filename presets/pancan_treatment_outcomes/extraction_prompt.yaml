@@ -92,6 +92,21 @@ instruction: |
   - sample_size: number of cells, animals, samples, or patients if stated.
   - statistics: p-value, CI, HR, SD, SE, error bar, or significance marker.
 
+  Value quality rules:
+  - Create a record only when the endpoint has a concrete reported value:
+    a number, rate, percentage, count, duration, concentration, dose-normalized
+    value, or numeric survival/outcome estimate.
+  - Do NOT create a record when the endpoint value is only qualitative, such as
+    prolonged, improved, reduced, increased, acceptable, manageable, significant,
+    durable, better, worse, higher, or lower.
+  - For adverse events, put only the quantitative result in value, such as
+    75.9%, 12/57, 3 patients, or grade 3/4 adverse events 75.9%. Do not use a
+    plain symptom list as value. Toxicity grade alone is not an outcome value.
+  - Put toxicity severity such as grade 1, grade 3/4, CTCAE grade, HR, CI, and
+    p-values in statistics unless it is part of a quantified endpoint label.
+  - If no concrete numeric value is stated for the endpoint, skip the record
+    rather than filling value with a qualitative phrase.
+
   Output rules:
   - Return only a JSON object with this shape: {"records": [...]}.
   - Use null for fields not explicitly stated.

@@ -114,39 +114,33 @@ output directory so later batches extend the previous results instead of
 creating isolated folders.
 
 ```bash
-python run_paper_filter.py \
+.venv/bin/python run_pipeline.py \
   --requirements my_project/user_requirements.yaml \
-  --input my_project/input_papers \
+  --xml my_project/input_papers \
   --output my_project/outputs \
   --limit 10
-
-python run_preprocess.py \
-  --passed my_project/outputs/passed_papers.jsonl \
-  --output my_project/outputs \
-  --limit 10
-
-python run_labeling.py \
-  --requirements my_project/user_requirements.yaml \
-  --chunks my_project/outputs/parsed_chunks.jsonl \
-  --output my_project/outputs \
-  --domain pancan_treatment_outcomes \
-  --limit 10
-
-python run_extraction.py \
-  --requirements my_project/user_requirements.yaml \
-  --chunks my_project/outputs/parsed_chunks.jsonl \
-  --labels my_project/outputs/labeled_chunks.jsonl \
-  --output my_project/outputs \
-  --limit 10
-
-python run_postprocess.py \
-  --requirements my_project/user_requirements.yaml \
-  --records my_project/outputs/extracted_records.jsonl \
-  --output my_project/outputs
 ```
 
-Replace `--domain pancan_treatment_outcomes` with the `project_name` in your
-`user_requirements.yaml`.
+By default, `run_pipeline.py` reads the labeling domain from `project_name` in
+`user_requirements.yaml`. Use `--domain ...` only when you need to override it.
+
+## Fast Start: WOS Index Batch
+
+Use this when you start from a Web of Science `savedrecs.txt` export or a local
+folder of WOS `.txt` exports. WOS ingestion reads the index, then `--limit 10`
+controls how many unfinished papers move through the expensive stages.
+
+```bash
+.venv/bin/python run_pipeline.py \
+  --requirements my_project/user_requirements.yaml \
+  --wos my_project/savedrecs.txt \
+  --output my_project/outputs \
+  --limit 10
+```
+
+`records.csv` is rewritten by the final post-processing stage from all current
+postprocessed records. It is not a per-batch CSV and it is not blindly appended
+line by line.
 
 ## Quick Test: WOS Metadata Route
 
