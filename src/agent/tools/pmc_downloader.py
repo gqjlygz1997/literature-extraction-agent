@@ -309,7 +309,10 @@ def _read_jsonl_if_exists(path: Path) -> list[dict]:
 
 def _identity_values(row: dict) -> set[str]:
     values: set[str] = set()
-    for key in ("paper_id", "pmcid", "pmid", "doi", "wos_uid", "source_path", "source_file"):
+    keys = ["paper_id", "pmcid", "pmid", "doi", "wos_uid"]
+    if row.get("file_type") != "metadata":
+        keys.extend(["source_path", "source_file"])
+    for key in keys:
         text = str(row.get(key) or "").strip()
         if text:
             values.add(text)

@@ -363,9 +363,12 @@ class DomainExtractionWorkflow:
                 row_or_path.get("pmid"),
                 row_or_path.get("doi"),
                 row_or_path.get("wos_uid"),
-                row_or_path.get("source_path"),
-                row_or_path.get("source_file"),
             ]
+            if row_or_path.get("file_type") != "metadata":
+                candidates.extend([
+                    row_or_path.get("source_path"),
+                    row_or_path.get("source_file"),
+                ])
 
         for value in candidates:
             text = str(value or "").strip()

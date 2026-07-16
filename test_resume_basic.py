@@ -54,6 +54,7 @@ def test_paper_filter_limit_skips_existing():
                 "paper_id": f"WOS_{idx}",
                 "metadata_source": "wos",
                 "file_type": "metadata",
+                "source_file": "savedrecs.txt",
                 "title": f"Paper {idx}",
                 "abstract": "Reports relevant evidence.",
                 "text_for_filter": "Reports relevant evidence.",
@@ -96,6 +97,38 @@ def test_paper_filter_limit_skips_existing():
     assert [row["paper_id"] for row in results] == ["WOS_1", "WOS_2"]
     assert FakeLabeler.calls == ["WOS_1", "WOS_2"]
     print("  ✓ paper-filter resumes with limit as new-paper batch size")
+    return True
+
+
+def test_wos_metadata_identity_ignores_shared_source_file():
+    print("\nTesting WOS metadata identity ignores shared source file...")
+
+    from src.agent.workflow import DomainExtractionWorkflow
+    from src.agent.tools.pmc_downloader import _identity_values as downloader_identity_values
+
+    first = {
+        "paper_id": "WOS_1",
+        "metadata_source": "wos",
+        "file_type": "metadata",
+        "source_file": "savedrecs.txt",
+        "doi": "10.1000/one",
+        "pmid": "111",
+        "wos_uid": "WOS:1",
+    }
+    second = {
+        "paper_id": "WOS_2",
+        "metadata_source": "wos",
+        "file_type": "metadata",
+        "source_file": "savedrecs.txt",
+        "doi": "10.1000/two",
+        "pmid": "222",
+        "wos_uid": "WOS:2",
+    }
+
+    assert not (DomainExtractionWorkflow._identity_values(first) & DomainExtractionWorkflow._identity_values(second))
+    assert not (downloader_identity_values(first) & downloader_identity_values(second))
+
+    print("  ✓ shared WOS source files do not collide in resume checks")
     return True
 
 
@@ -191,6 +224,7 @@ def test_fulltext_acquisition_limit_skips_existing():
 if __name__ == "__main__":
     tests = [
         test_paper_filter_limit_skips_existing,
+        test_wos_metadata_identity_ignores_shared_source_file,
         test_preprocess_limit_skips_existing,
         test_fulltext_acquisition_limit_skips_existing,
     ]
