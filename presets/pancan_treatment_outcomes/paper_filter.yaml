@@ -2,10 +2,12 @@ domain_name: pancan_treatment_outcomes
 domain_description: >
   Extract pancreatic cancer drug-development evidence from full-text papers.
   The evidence can include in vitro efficacy, in vivo efficacy,
-  pharmacokinetics, animal toxicity, and clinical outcomes. Include original
-  experimental studies and clinical studies related to pancreatic cancer drug
-  development. Exclude reviews, editorials, commentaries, papers not related to
-  pancreatic cancer, and papers without original drug-development evidence.
+  pharmacokinetics, animal toxicity, clinical outcomes, therapeutic target
+  validation, drug-sensitivity evidence, and mechanism studies with clear
+  treatment relevance. Include original experimental studies and clinical
+  studies related to pancreatic cancer drug development. Exclude reviews,
+  editorials, commentaries, papers not related to pancreatic cancer, and papers
+  without original evidence relevant to therapy or drug development.
 target_fields:
 - name: record_type
   description: "Evidence type: in_vitro_efficacy, in_vivo_efficacy, pk, animal_toxicity, or clinical_outcome."
@@ -52,9 +54,9 @@ paper_filter:
   pass_condition: all_required_not_false
   criteria:
   - name: is_pancreatic_cancer_drug_development_topic
-    question: Might this paper be about pancreatic cancer or pancreatic ductal adenocarcinoma drug development, treatment, efficacy, pharmacokinetics, toxicity, or clinical outcomes?
+    question: Might this paper be about pancreatic cancer or pancreatic ductal adenocarcinoma drug development, treatment, efficacy, therapeutic targets, drug sensitivity, treatment-relevant mechanisms, pharmacokinetics, toxicity, or clinical outcomes?
     expected_answer: true
-    rationale: Keep papers related to pancreatic cancer drug-development evidence, including preclinical and clinical studies. Reject clearly unrelated diseases or topics.
+    rationale: Keep papers related to pancreatic cancer drug-development evidence, therapeutic target discovery/validation, and treatment-relevant mechanisms, including preclinical and clinical studies. Reject clearly unrelated diseases or topics.
     required: true
   - name: is_original_evidence_study
     question: Might this paper report original experimental or clinical evidence rather than being only a review, editorial, commentary, protocol, guideline, or mechanism-only discussion without original data?
@@ -63,23 +65,26 @@ paper_filter:
     required: true
   - name: has_eligible_intervention_evidence
     question: >
-      Does the title or abstract explicitly report a drug, compound, regimen, or
-      other therapeutic intervention being evaluated in pancreatic cancer, with
-      an effect/outcome tied to that intervention or to a clearly defined
-      treatment cohort? Answer false for pure biomarker, diagnostic, prognostic,
-      target-discovery, or mechanistic studies, even when they mention drugs,
-      survival, treatment history, or a potential therapeutic target. Also answer
-      false when treatment is only a background patient characteristic rather
-      than the intervention evidence being studied.
-      Answer true when the abstract explicitly reports a drug/intervention effect,
-      including preclinical treatment studies embedded in mechanistic work (for
-      example, a drug suppresses a tumor phenotype or sensitizes a model to another
-      therapy). Answer uncertain only when the title/abstract is genuinely insufficient.
+      Might the title or abstract report original evidence relevant to pancreatic
+      cancer therapy or drug development? Answer true when it evaluates a drug,
+      compound, regimen, treatment cohort, drug-sensitivity/resistance phenotype,
+      therapeutic target, genetic/biologic perturbation, or treatment-relevant
+      mechanism with an outcome in pancreatic cancer models or patients. This
+      includes target-discovery and mechanistic papers when the abstract reports
+      experimental phenotypes such as tumor growth, proliferation, apoptosis,
+      migration, invasion, metastasis, stemness, treatment sensitivity, or survival.
+      Answer false only when the study is clearly a pure risk-factor, diagnostic,
+      prognostic, epidemiologic, or association-only paper with no evaluated
+      intervention, therapeutic target, drug-sensitivity evidence, or actionable
+      treatment mechanism. Also answer false when treatment is only a background
+      patient characteristic rather than evidence being studied. Answer uncertain
+      only when the title/abstract is genuinely insufficient.
     expected_answer: true
     rationale: >
-      A record must link an evaluated intervention, or a clearly defined treatment
-      cohort, to an outcome. Biomarker-only prognostic associations do not fit the
-      five supported drug-development evidence types.
+      Paper filtering should favor recall. Full-text extraction and
+      post-processing can later decide whether a paper contains structured
+      numeric records, but potentially useful therapeutic targets and mechanisms
+      should not be discarded from title/abstract alone.
     required: true
     uncertain_policy: pass
   - name: might_report_development_endpoint
