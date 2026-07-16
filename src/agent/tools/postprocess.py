@@ -93,6 +93,7 @@ def parse_numeric_value(
     *,
     detect_unit: bool = True,
     parse_ranges: bool = True,
+    allow_multiple_numbers: bool = False,
 ) -> dict[str, Any] | None:
     """Parse a value like '200-300 MPa', '<0.001', or '24.3 months'.
 
@@ -115,16 +116,21 @@ def parse_numeric_value(
     text = _normalize_numeric_text(str(cleaned))
     unit = (_detect_unit(text) if detect_unit else None) or _canonical_unit(default_unit)
 
-    range_match = _find_range(text) if parse_ranges else None
-    if range_match:
-        left, right = range_match
-        left, right, unit = _convert_pair(left, right, unit, default_unit)
+    # A leading estimate followed by a parenthesized range is common in clinical
+    # reporting, e.g. "median OS 17.1 (0.6-61.9) months". The leading number is
+    # the outcome; averaging the parenthesized range would change its meaning.
+    primary_range_match = _find_primary_with_parenthesized_range(text)
+    if primary_range_match:
+        value, lower, upper = primary_range_match
+        value, unit = _convert_one(value, unit, default_unit)
+        lower, upper, unit = _convert_pair(lower, upper, unit, default_unit)
         return {
             "raw": str(cleaned),
-            "operator": "range",
-            "value": _round_float((left + right) / 2),
-            "value_min": _round_float(left),
-            "value_max": _round_float(right),
+            "operator": "reported_with_range",
+            "value": _round_float(value),
+            "value_min": _round_float(lower),
+            "value_max": _round_float(upper),
+            "error": None,
             "unit": unit,
         }
 
@@ -143,10 +149,33 @@ def parse_numeric_value(
             "raw": str(cleaned),
             "operator": "plus_minus",
             "value": _round_float(value),
-            "value_min": _round_float(value - error),
-            "value_max": _round_float(value + error),
+            "value_min": None,
+            "value_max": None,
+            "error": _round_float(error),
             "unit": unit,
         }
+
+    number_count = len(_measurement_numbers(text))
+    range_match = _find_range(text) if parse_ranges else None
+    if range_match:
+        if not allow_multiple_numbers and number_count != 2:
+            return None
+        left, right = range_match
+        left, right, unit = _convert_pair(left, right, unit, default_unit)
+        return {
+            "raw": str(cleaned),
+            "operator": "range",
+            "value": _round_float((left + right) / 2),
+            "value_min": _round_float(left),
+            "value_max": _round_float(right),
+            "error": None,
+            "unit": unit,
+        }
+
+    # Do not turn a compound statement such as "liver 7 (33%), lung 2 (10%)"
+    # into one arbitrary scalar. The raw value remains available for review.
+    if not allow_multiple_numbers and number_count != 1:
+        return None
 
     operator = "eq"
     if re.search(r"(<=|≤)", text):
@@ -172,6 +201,7 @@ def parse_numeric_value(
         "value": _round_float(value),
         "value_min": None,
         "value_max": None,
+        "error": None,
         "unit": unit,
     }
     if operator in {"<", "<="}:
@@ -281,11 +311,20 @@ def postprocess_records(
 
             if field in numeric_fields:
                 field_numeric_cfg = numeric_fields[field]
+                default_unit = field_numeric_cfg.get("unit")
+                unit_source = field_numeric_cfg.get("unit_from_field")
+                if unit_source:
+                    source_value = clean_scalar(record.get(unit_source), null_values)
+                    if source_value is not None:
+                        default_unit = _detect_unit(str(source_value)) or default_unit
                 norm = parse_numeric_value(
                     before,
-                    field_numeric_cfg.get("unit"),
+                    default_unit,
                     detect_unit=field_numeric_cfg.get("detect_unit", True),
                     parse_ranges=field_numeric_cfg.get("parse_ranges", True),
+                    allow_multiple_numbers=field_numeric_cfg.get(
+                        "allow_multiple_numbers", False
+                    ),
                 )
                 if norm is not None:
                     if numeric_fields[field].get("integer") and norm.get("value") is not None:
@@ -362,10 +401,13 @@ def write_records_csv(
                 f"{field}_operator",
                 f"{field}_value_min",
                 f"{field}_value_max",
+                f"{field}_error",
             ])
     columns.append("source_chunk_ids")
 
-    with open(path, "w", encoding="utf-8", newline="") as fh:
+    # Excel on macOS/Windows reliably detects UTF-8 when the CSV includes a BOM.
+    # JSONL remains plain UTF-8; this applies only to the spreadsheet export.
+    with open(path, "w", encoding="utf-8-sig", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=columns)
         writer.writeheader()
         for record in records:
@@ -383,6 +425,7 @@ def write_records_csv(
                     row[f"{field}_operator"] = _csv_value(norm.get("operator"))
                     row[f"{field}_value_min"] = _csv_value(norm.get("value_min"))
                     row[f"{field}_value_max"] = _csv_value(norm.get("value_max"))
+                    row[f"{field}_error"] = _csv_value(norm.get("error"))
             row["source_chunk_ids"] = ";".join(record.get("source_chunk_ids") or [])
             writer.writerow(row)
 
@@ -413,12 +456,47 @@ def _find_range(text: str) -> tuple[float, float] | None:
     return left, right
 
 
+def _find_primary_with_parenthesized_range(text: str) -> tuple[float, float, float] | None:
+    match = re.search(
+        rf"({NUMBER_RE.pattern})\s*\(\s*({NUMBER_RE.pattern})\s*(?:-|to|~)\s*({NUMBER_RE.pattern})\s*\)",
+        text,
+        flags=re.I,
+    )
+    if not match:
+        return None
+    value = float(match.group(1))
+    lower = float(match.group(2))
+    upper = float(match.group(3))
+    if lower > upper:
+        lower, upper = upper, lower
+    return value, lower, upper
+
+
+def _measurement_numbers(text: str) -> list[str]:
+    """Return number tokens while ignoring the 2 in dose units such as mg/m2."""
+    matches = []
+    for match in NUMBER_RE.finditer(text):
+        if (
+            match.group(0) == "2"
+            and match.start() > 0
+            and text[match.start() - 1].lower() == "m"
+        ):
+            continue
+        matches.append(match.group(0))
+    return matches
+
+
 def _detect_unit(text: str) -> str | None:
     lowered = text.lower()
     concentration_match = re.search(r"\b(nM|uM|µM|μM|mM)\b", text)
     if concentration_match:
         raw = concentration_match.group(1)
         return {"µM": "uM", "μM": "uM"}.get(raw, raw)
+    dose_area_match = re.search(
+        r"\b(?:ng|ug|µg|μg|mg|g)\s*/\s*m(?:\^?2|²)\b", text, flags=re.I
+    )
+    if dose_area_match:
+        return _canonical_unit(dose_area_match.group(0))
     if re.search(r"\b(ng|ug|µg|μg|mg)/m[lL]\b", text):
         return _canonical_unit(re.search(r"\b(ng|ug|µg|μg|mg)/m[lL]\b", text).group(0))
     if re.search(r"\b(mg|ug|µg|μg)/kg(?:/day)?\b", lowered):
@@ -466,6 +544,9 @@ def _canonical_unit(unit: str | None) -> str | None:
         "ng/ml": "ng/mL",
         "mg/ml": "mg/mL",
         "mg/kg/day": "mg/kg/day",
+        "mg/m2": "mg/m2",
+        "mg/m^2": "mg/m2",
+        "mg/m²": "mg/m2",
         "ug/kg": "ug/kg",
         "µg/kg": "ug/kg",
         "μg/kg": "ug/kg",

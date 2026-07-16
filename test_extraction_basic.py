@@ -189,6 +189,59 @@ def test_unrestricted_constraint_is_disabled():
     assert build_endpoint_constraint({"mode": "unrestricted"}) is None
 
 
+def test_transport_error_stops_output_mode_fallback(monkeypatch=None):
+    from src.agent.tools import extractor
+
+    class DummyLLM:
+        pass
+
+    class DummyRecords:
+        pass
+
+    original_build_llm = extractor._build_llm
+    original_plain = extractor._invoke_plain_json
+    original_structured = extractor._invoke_structured
+    structured_calls = []
+    try:
+        extractor._build_llm = lambda _: DummyLLM()
+
+        def fail_plain(*args, **kwargs):
+            raise TimeoutError("request timed out")
+
+        def structured(*args, **kwargs):
+            structured_calls.append(kwargs["method"])
+            return {"records": []}
+
+        extractor._invoke_plain_json = fail_plain
+        extractor._invoke_structured = structured
+        rows, status = extractor.extract_records(
+            "context", "system", "instruction", DummyRecords(), model_name="kimi-k2.6"
+        )
+        assert rows == []
+        assert status == "failed:TimeoutError"
+        assert structured_calls == []
+    finally:
+        extractor._build_llm = original_build_llm
+        extractor._invoke_plain_json = original_plain
+        extractor._invoke_structured = original_structured
+
+
+def test_extractor_disables_implicit_retries(monkeypatch=None):
+    import os
+    from src.agent.tools.extractor import _build_llm
+
+    previous = os.environ.get("EXTRACTOR_MAX_RETRIES")
+    try:
+        os.environ["EXTRACTOR_MAX_RETRIES"] = "0"
+        llm = _build_llm("kimi-k2.6")
+        assert llm.max_retries == 0
+    finally:
+        if previous is None:
+            os.environ.pop("EXTRACTOR_MAX_RETRIES", None)
+        else:
+            os.environ["EXTRACTOR_MAX_RETRIES"] = previous
+
+
 def main():
     tests = [
         test_build_records_model,
@@ -203,6 +256,8 @@ def main():
         test_endpoint_constraint_rejects_incompatible_pair,
         test_endpoint_constraint_canonicalizes_alias_before_dedupe,
         test_unrestricted_constraint_is_disabled,
+        test_transport_error_stops_output_mode_fallback,
+        test_extractor_disables_implicit_retries,
     ]
     for test in tests:
         test()

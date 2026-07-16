@@ -52,6 +52,11 @@ DSPy/LLM generation
 This means a mature domain can run mostly from hand-written stable prompts, while
 new domains still fall back to DSPy-generated configs.
 
+Because stage outputs are resumable, changing a preset does not automatically
+rewrite papers that were already completed. After editing `paper_filter.yaml`,
+`labeling_config.yaml`, `extraction_prompt.yaml`, or `postprocess_config.yaml`,
+rerun the affected stage with `--force` if existing papers should be recomputed.
+
 `postprocess_config.yaml` is used after extraction. It can define numeric field
 units, standard terms/synonyms, and validity filters. This mirrors ALLMAT's
 rule-based normalization/entity-resolution layer, but keeps the rules in a

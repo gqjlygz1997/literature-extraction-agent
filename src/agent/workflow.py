@@ -49,6 +49,7 @@ class DomainExtractionWorkflow:
         paper_filter_config=None,
         dry_run: bool = False,
         limit: int | None = None,
+        resume: bool = True,
     ):
         """Run the paper-filter MVP over local papers or external metadata.
 
@@ -76,6 +77,10 @@ class DomainExtractionWorkflow:
             config = paper_filter_config
             logger.info("Using provided paper filter config (skipping generation).")
             self.config_generator.save(config, config_path)
+        elif resume and config_path.exists():
+            logger.info("Found existing paper filter config at %s; reusing it.", config_path)
+            from .config_generator import ConfigGenerator
+            config = ConfigGenerator.load(config_path)
         elif dry_run:
             logger.info("Dry run: skipping LLM config generation.")
             config = self._build_dry_run_config(user_requirements)
@@ -86,27 +91,50 @@ class DomainExtractionWorkflow:
             logger.info("Saved generated config to %s", config_path)
 
         # --- step 2 + 3 + 4: collect metadata + classify ---------------
-        all_results: list[dict] = []
+        existing_results = (
+            self._read_jsonl_if_exists(output_dir / "paper_filter_results.jsonl")
+            if resume
+            else []
+        )
+        done_index = self._identity_index(existing_results)
+        all_results: list[dict] = list(existing_results)
+        new_results: list[dict] = []
+
         if metadata_path is not None:
             metadata_rows = self._read_jsonl(metadata_path)
+            if resume and done_index:
+                metadata_rows = [
+                    row for row in metadata_rows
+                    if not self._is_done(row, done_index)
+                ]
             if limit:
                 metadata_rows = metadata_rows[:limit]
             logger.info(
-                "Found %d metadata candidate(s) to process in %s",
-                len(metadata_rows), metadata_path,
+                "Found %d metadata candidate(s) to process in %s (%d already done)",
+                len(metadata_rows), metadata_path, len(existing_results),
             )
             for row in tqdm(metadata_rows, desc="Paper filter", unit="paper"):
                 result = self._process_one_metadata(row, config, dry_run=dry_run)
+                new_results.append(result)
                 all_results.append(result)
         else:
             paper_paths = self._scan_papers(papers_dir)
+            if resume and done_index:
+                paper_paths = [
+                    path for path in paper_paths
+                    if not self._is_done(path, done_index)
+                ]
             if limit:
                 paper_paths = paper_paths[:limit]
-            logger.info("Found %d paper(s) to process in %s", len(paper_paths), papers_dir)
+            logger.info(
+                "Found %d paper(s) to process in %s (%d already done)",
+                len(paper_paths), papers_dir, len(existing_results),
+            )
             for path in tqdm(paper_paths, desc="Paper filter", unit="paper"):
                 result = self._process_one_paper(
                     path, config, dry_run=dry_run
                 )
+                new_results.append(result)
                 all_results.append(result)
 
         # --- step 5: write outputs ------------------------------------
@@ -114,13 +142,17 @@ class DomainExtractionWorkflow:
         self._write_outputs(all_results, output_dir, config, config_path_for_summary)
 
         counts = self._summarise(all_results)
+        counts["processed_this_run"] = len(new_results)
+        counts["previously_processed"] = len(existing_results)
         logger.info(
-            "Done. total=%d passed=%d rejected=%d error=%d dry_run=%d",
+            "Done. total=%d passed=%d rejected=%d error=%d dry_run=%d new=%d existing=%d",
             counts["total"],
             counts["passed"],
             counts["rejected"],
             counts["error"],
             counts.get("dry_run", 0),
+            counts["processed_this_run"],
+            counts["previously_processed"],
         )
         return counts
 
@@ -133,6 +165,7 @@ class DomainExtractionWorkflow:
         passed_papers_path: str | Path,
         output_dir: str | Path,
         limit: int | None = None,
+        resume: bool = True,
     ) -> dict:
         """Parse full text of papers that passed the filter.
 
@@ -152,21 +185,46 @@ class DomainExtractionWorkflow:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         rows = self._read_jsonl(passed_papers_path)
+        chunks_path = output_dir / "parsed_chunks.jsonl"
+        previous_summary = self._read_json_if_exists(
+            output_dir / "preprocessing_summary.json"
+        ) if resume else {}
+        all_chunks: list[dict] = (
+            self._read_jsonl_if_exists(chunks_path) if resume else []
+        )
+        existing_paper_ids = {
+            str(chunk.get("paper_id", "")).strip()
+            for chunk in all_chunks
+            if chunk.get("paper_id")
+        }
+        skipped_existing = 0
+        if resume and existing_paper_ids:
+            pending_rows = []
+            for row in rows:
+                paper_id = str(row.get("paper_id", "")).strip()
+                if paper_id and paper_id in existing_paper_ids:
+                    skipped_existing += 1
+                    continue
+                pending_rows.append(row)
+            rows_to_process = pending_rows
+        else:
+            rows_to_process = list(rows)
         if limit:
-            rows = rows[:limit]
-        logger.info("Preprocessing %d passed paper(s) from %s",
-                    len(rows), passed_papers_path)
+            rows_to_process = rows_to_process[:limit]
+        logger.info(
+            "Preprocessing %d passed paper(s) from %s (%d already parsed)",
+            len(rows_to_process), passed_papers_path, skipped_existing,
+        )
 
-        all_chunks: list[dict] = []
         errors: list[dict] = []
         skipped_sections: dict[str, int] = {}
-        parsed_ok = 0
-        type_counts: dict[str, int] = {"paragraph": 0, "table": 0, "abstract": 0}
+        processed_paper_ids: set[str] = set()
 
-        for row in tqdm(rows, desc="Preprocess", unit="paper"):
+        for row in tqdm(rows_to_process, desc="Preprocess", unit="paper"):
             paper_id = row.get("paper_id", "")
             source_path = row.get("source_path", "")
             file_type = row.get("file_type", "")
+            processed_paper_ids.add(str(paper_id or source_path))
 
             if file_type != "xml":
                 errors.append({
@@ -186,9 +244,7 @@ class DomainExtractionWorkflow:
                 })
                 continue
 
-            parsed_ok += 1
             for c in chunks:
-                type_counts[c.chunk_type] = type_counts.get(c.chunk_type, 0) + 1
                 all_chunks.append({
                     "paper_id": c.paper_id,
                     "chunk_id": c.chunk_id,
@@ -202,7 +258,7 @@ class DomainExtractionWorkflow:
                 skipped_sections[tag] = skipped_sections.get(tag, 0) + n
 
         # --- write outputs --------------------------------------------
-        self._write_jsonl(output_dir / "parsed_chunks.jsonl", all_chunks)
+        self._write_jsonl(chunks_path, all_chunks)
 
         from .tools.xml_full_text_parser import (
             CHUNKING_CONFIG,
@@ -210,12 +266,38 @@ class DomainExtractionWorkflow:
             SUPPORTED_FORMAT,
         )
 
+        type_counts: dict[str, int] = {"paragraph": 0, "table": 0, "abstract": 0}
+        parsed_paper_ids: set[str] = set()
+        for chunk in all_chunks:
+            chunk_type = chunk.get("chunk_type", "")
+            type_counts[chunk_type] = type_counts.get(chunk_type, 0) + 1
+            paper_id = str(chunk.get("paper_id", "")).strip()
+            if paper_id:
+                parsed_paper_ids.add(paper_id)
+
+        previous_errors = previous_summary.get("errors", [])
+        if not isinstance(previous_errors, list):
+            previous_errors = []
+        completed_after = set(parsed_paper_ids)
+        errors = [
+            err for err in previous_errors
+            if str(err.get("paper_id") or err.get("source_path") or "") not in processed_paper_ids
+            and str(err.get("paper_id") or "") not in completed_after
+        ] + errors
+
+        previous_skips = previous_summary.get("skipped_sections", {})
+        if isinstance(previous_skips, dict):
+            for tag, n in previous_skips.items():
+                skipped_sections[tag] = skipped_sections.get(tag, 0) + int(n)
+
         summary = {
             "parser_version": PARSER_VERSION,
             "supported_format": SUPPORTED_FORMAT,
             "chunking_config": CHUNKING_CONFIG,
             "total_papers": len(rows),
-            "parsed_ok": parsed_ok,
+            "processed_this_run": len(rows_to_process),
+            "skipped_existing": skipped_existing,
+            "parsed_ok": len(parsed_paper_ids),
             "parse_error": len(errors),
             "total_chunks": len(all_chunks),
             "paragraph_chunks": type_counts.get("paragraph", 0),
@@ -228,9 +310,10 @@ class DomainExtractionWorkflow:
             json.dump(summary, fh, ensure_ascii=False, indent=2)
 
         logger.info(
-            "Done. papers=%d parsed_ok=%d parse_error=%d chunks=%d (para=%d table=%d abs=%d)",
-            summary["total_papers"], parsed_ok, len(errors), summary["total_chunks"],
+            "Done. papers=%d parsed_ok=%d parse_error=%d chunks=%d (para=%d table=%d abs=%d) new=%d existing=%d",
+            summary["total_papers"], summary["parsed_ok"], len(errors), summary["total_chunks"],
             summary["paragraph_chunks"], summary["table_chunks"], summary["abstract_chunks"],
+            summary["processed_this_run"], summary["skipped_existing"],
         )
         return summary
 
@@ -249,6 +332,57 @@ class DomainExtractionWorkflow:
         with open(path, "w", encoding="utf-8") as fh:
             for row in rows:
                 fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+    @staticmethod
+    def _read_jsonl_if_exists(path: Path) -> list[dict]:
+        if not path.exists():
+            return []
+        return DomainExtractionWorkflow._read_jsonl(path)
+
+    @staticmethod
+    def _read_json_if_exists(path: Path) -> dict:
+        if not path.exists():
+            return {}
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+
+    @staticmethod
+    def _identity_values(row_or_path) -> set[str]:
+        """Return stable identifiers used to decide whether a paper is done."""
+
+        values: set[str] = set()
+        if isinstance(row_or_path, Path):
+            candidates = [row_or_path.stem, row_or_path.name, str(row_or_path)]
+        elif isinstance(row_or_path, str):
+            path = Path(row_or_path)
+            candidates = [row_or_path, path.stem, path.name]
+        else:
+            candidates = [
+                row_or_path.get("paper_id"),
+                row_or_path.get("pmcid"),
+                row_or_path.get("pmid"),
+                row_or_path.get("doi"),
+                row_or_path.get("wos_uid"),
+                row_or_path.get("source_path"),
+                row_or_path.get("source_file"),
+            ]
+
+        for value in candidates:
+            text = str(value or "").strip()
+            if text:
+                values.add(text)
+        return values
+
+    @classmethod
+    def _identity_index(cls, rows: list[dict]) -> set[str]:
+        values: set[str] = set()
+        for row in rows:
+            values.update(cls._identity_values(row))
+        return values
+
+    @classmethod
+    def _is_done(cls, row_or_path, done_index: set[str]) -> bool:
+        return bool(cls._identity_values(row_or_path) & done_index)
 
     # ------------------------------------------------------------------ #
     #  Internal helpers                                                    #
@@ -524,6 +658,8 @@ class DomainExtractionWorkflow:
         config_path: str | Path = None,
         preset_dir: str | Path | None = None,
         use_presets: bool = True,
+        limit: int | None = None,
+        resume: bool = True,
     ) -> dict:
         """
         Labeling 阶段 MVP 主流程
@@ -686,15 +822,50 @@ class DomainExtractionWorkflow:
         logger.info("\n[Step 5] Labeling chunks...")
 
         labeled_chunks_path = output_dir / "labeled_chunks.jsonl"
+        summary_path = output_dir / "labeling_summary.json"
+        existing_main_rows = (
+            self._read_jsonl_if_exists(labeled_chunks_path) if resume else []
+        )
+        existing_summary = (
+            self._read_json_if_exists(summary_path) if resume else {}
+        )
+        processed_paper_ids = set(existing_summary.get("processed_papers") or [])
+        if resume and not processed_paper_ids:
+            processed_paper_ids = {
+                str(row.get("paper_id", "")).strip()
+                for row in existing_main_rows
+                if row.get("paper_id")
+            }
 
         # 收集所有 paper-field 的标注结果（保留原始 item，供聚合使用）
         raw_labeled: list[dict] = []
 
-        total_papers = len(papers_map)
-        total_fields = len(labeling_config["fields"])
+        paper_items = list(papers_map.items())
+        skipped_existing = 0
+        if resume and processed_paper_ids:
+            pending_items = []
+            for paper_id, paper_chunks in paper_items:
+                if paper_id in processed_paper_ids:
+                    skipped_existing += 1
+                    continue
+                pending_items.append((paper_id, paper_chunks))
+        else:
+            pending_items = paper_items
+        if limit:
+            pending_items = pending_items[:limit]
 
-        for paper_idx, (paper_id, paper_chunks) in enumerate(papers_map.items(), 1):
+        total_papers = len(pending_items)
+        total_fields = len(labeling_config["fields"])
+        processed_this_run_ids: list[str] = []
+
+        logger.info(
+            "  Papers to label: %d (%d already labeled)",
+            total_papers, skipped_existing,
+        )
+
+        for paper_idx, (paper_id, paper_chunks) in enumerate(pending_items, 1):
             logger.info(f"\n  Paper [{paper_idx}/{total_papers}]: {paper_id}")
+            processed_this_run_ids.append(paper_id)
 
             for field_idx, field_config in enumerate(labeling_config["fields"], 1):
                 field_name = field_config["field_name"]
@@ -723,8 +894,20 @@ class DomainExtractionWorkflow:
                     })
 
         # 按 chunk 聚合成一行一 chunk 的主输出
-        main_rows = self._aggregate_labeled_chunks(
+        new_main_rows = self._aggregate_labeled_chunks(
             raw_labeled, labeling_config, vector_builder
+        )
+        processed_this_run_set = set(processed_this_run_ids)
+        main_rows = [
+            row for row in existing_main_rows
+            if row.get("paper_id") not in processed_this_run_set
+        ] + new_main_rows
+        main_rows.sort(
+            key=lambda x: (
+                x["paper_id"],
+                x["chunk_index"] if x.get("chunk_index") is not None else float("inf"),
+                x["chunk_id"],
+            )
         )
 
         # ========== Step 6: 保存输出 ==========
@@ -737,9 +920,19 @@ class DomainExtractionWorkflow:
         # ========== Step 7: 生成摘要 ==========
         logger.info("\n[Step 7] Generating summary...")
 
-        summary = self._generate_labeling_summary(main_rows, labeling_config)
+        processed_papers_all = sorted(
+            (processed_paper_ids & set(papers_map)) | processed_this_run_set
+        )
+        summary = self._generate_labeling_summary(
+            main_rows,
+            labeling_config,
+            processed_papers=processed_papers_all,
+        )
+        summary.update({
+            "processed_this_run": len(processed_this_run_ids),
+            "skipped_existing": skipped_existing,
+        })
 
-        summary_path = output_dir / "labeling_summary.json"
         with open(summary_path, 'w', encoding="utf-8") as f:
             json.dump(summary, f, indent=2, ensure_ascii=False)
 
@@ -1175,7 +1368,11 @@ class DomainExtractionWorkflow:
         return main_rows
 
     @staticmethod
-    def _generate_labeling_summary(main_rows: list[dict], config: dict) -> dict:
+    def _generate_labeling_summary(
+        main_rows: list[dict],
+        config: dict,
+        processed_papers: list[str] | None = None,
+    ) -> dict:
         """生成标注摘要统计（基于 chunk 聚合后的主输出）"""
 
         total_labeled_chunks = len(main_rows)
@@ -1206,6 +1403,8 @@ class DomainExtractionWorkflow:
         return {
             "total_labeled_chunks": total_labeled_chunks,
             "total_label_assignments": total_label_assignments,
+            "total_papers_processed": len(processed_papers or by_paper),
+            "processed_papers": processed_papers or sorted(by_paper),
             "by_field": by_field,
             "by_paper": by_paper,
             "config_fields": [f["field_name"] for f in config["fields"]],
@@ -1257,6 +1456,8 @@ class DomainExtractionWorkflow:
         prompt_preset_path: str | Path | None = None,
         preset_dir: str | Path | None = None,
         use_presets: bool = True,
+        limit: int | None = None,
+        resume: bool = True,
     ) -> dict:
         """
         Stage 2 Extraction 主流程。
@@ -1361,14 +1562,49 @@ class DomainExtractionWorkflow:
         logger.info(f"  {len(all_parsed)} chunks, {len(paper_ids)} papers")
 
         # ── Step 3: 逐篇抽取 ──
-        logger.info(f"\n[Step 3] Extracting from {len(paper_ids)} papers...")
+        output_records_path = output_dir / "extracted_records.jsonl"
+        summary_path = output_dir / "extraction_summary.json"
+        existing_records = (
+            self._read_jsonl_if_exists(output_records_path) if resume else []
+        )
+        existing_summary = (
+            self._read_json_if_exists(summary_path) if resume else {}
+        )
+        existing_by_paper = existing_summary.get("by_paper", {})
+        if not isinstance(existing_by_paper, dict):
+            existing_by_paper = {}
 
-        all_records = []
-        by_paper = {}
-        total_removed = 0
+        completed_statuses = ("ok", "skipped:no_context")
+        completed_paper_ids = {
+            paper_id for paper_id, info in existing_by_paper.items()
+            if str(info.get("extraction_status", "")).startswith(completed_statuses)
+        }
+        pending_paper_ids = [
+            paper_id for paper_id in paper_ids
+            if not (resume and paper_id in completed_paper_ids)
+        ]
+        skipped_existing = len(paper_ids) - len(pending_paper_ids)
+        if limit:
+            pending_paper_ids = pending_paper_ids[:limit]
 
-        for idx, paper_id in enumerate(paper_ids, 1):
-            logger.info(f"\n  [{idx}/{len(paper_ids)}] {paper_id}")
+        logger.info(
+            f"\n[Step 3] Extracting from {len(pending_paper_ids)} papers "
+            f"({skipped_existing} already complete)..."
+        )
+
+        pending_set = set(pending_paper_ids)
+        all_records = [
+            row for row in existing_records
+            if row.get("paper_id") not in pending_set
+        ]
+        by_paper = {
+            paper_id: info
+            for paper_id, info in existing_by_paper.items()
+            if paper_id in paper_ids and paper_id not in pending_set
+        }
+
+        for idx, paper_id in enumerate(pending_paper_ids, 1):
+            logger.info(f"\n  [{idx}/{len(pending_paper_ids)}] {paper_id}")
 
             context_str, used_ids = build_context(
                 paper_id, chunk_store, labeled_map[paper_id]
@@ -1408,7 +1644,6 @@ class DomainExtractionWorkflow:
 
             logger.info(f"    Cleaned: {len(cleaned)} ({n_removed} dedup removed)")
 
-            total_removed += n_removed
             all_records.extend(cleaned)
             by_paper[paper_id] = {
                 "extraction_status": status,
@@ -1422,13 +1657,22 @@ class DomainExtractionWorkflow:
                 "context_chunks_used": len(used_ids),
             }
 
+            # Keep completed papers available if a later LLM request is slow or
+            # the user interrupts a long batch. The final write below has the
+            # same format, so downstream readers need no special handling.
+            self._write_jsonl(output_records_path, all_records)
+            logger.info(f"    Checkpoint saved: {len(all_records)} records")
+
         # ── Step 4: 输出 ──
         logger.info(f"\n[Step 4] Writing outputs...")
 
-        self._write_jsonl(output_dir / "extracted_records.jsonl", all_records)
+        self._write_jsonl(output_records_path, all_records)
         logger.info(f"  ✓ {len(all_records)} records")
 
         import os as _os
+        total_removed = sum(
+            v.get("duplicates_removed", 0) for v in by_paper.values()
+        )
         total_constraint_rejected = sum(
             v.get("endpoint_constraint_rejected", 0) for v in by_paper.values()
         )
@@ -1443,13 +1687,16 @@ class DomainExtractionWorkflow:
         summary = {
             "total_papers_processed": len(paper_ids),
             "total_papers_failed": sum(
-                1 for v in by_paper.values() if not v["extraction_status"].startswith("ok")
+                1 for v in by_paper.values()
+                if not str(v.get("extraction_status", "")).startswith(completed_statuses)
             ),
             "total_records_extracted": len(all_records),
             "duplicates_removed": total_removed,
             "endpoint_constraint_rejected": total_constraint_rejected,
             "endpoint_constraint_rejected_by_combo": total_constraint_rejected_by_combo,
             "by_paper": by_paper,
+            "processed_this_run": len(pending_paper_ids),
+            "skipped_existing": skipped_existing,
             "extractor_model": (
                 model_name
                 or _os.environ.get("EXTRACTOR_MODEL")
@@ -1459,7 +1706,7 @@ class DomainExtractionWorkflow:
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
-        with open(output_dir / "extraction_summary.json", "w", encoding="utf-8") as fh:
+        with open(summary_path, "w", encoding="utf-8") as fh:
             json.dump(summary, fh, indent=2, ensure_ascii=False)
         logger.info(f"  ✓ extraction_summary.json")
 

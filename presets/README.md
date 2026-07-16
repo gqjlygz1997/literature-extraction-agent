@@ -54,6 +54,10 @@ DSPy/LLM generation
 This lets production runs behave like ALLMAT: stable hand-written rules by
 default, with DSPy/LLM generation as fallback for new domains.
 
+Stage outputs are resumable. If a preset changes and existing papers should be
+recomputed with the new rules, rerun the affected stage with `--force`;
+otherwise completed papers remain skipped.
+
 For Stage 3, presets are especially important: generic code handles empty
 values, numeric parsing, strict deduplication, and CSV export, while each domain
 defines its own synonym tables, units, and validity rules.

@@ -201,7 +201,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--limit", type=int, metavar="N",
-        help="Process only the first N papers (smoke-test mode).",
+        help="Process at most N new papers. In resume mode, already processed papers are skipped first.",
+    )
+    parser.add_argument(
+        "--force", action="store_true",
+        help="Reprocess papers even if output files already contain results.",
     )
     parser.add_argument(
         "--dry-run", action="store_true",
@@ -329,6 +333,7 @@ def main(argv: list[str] | None = None) -> int:
         paper_filter_config=paper_filter_config,
         dry_run=args.dry_run,
         limit=args.limit,
+        resume=not args.force,
     )
 
     print(

@@ -17,6 +17,29 @@ optional presets/<project_name>/
 domain requirements. Presets are optional hand-written configs/prompts used
 before any DSPy/LLM-generated configuration.
 
+## Output Layout and Resume Model
+
+The recommended layout is one shared output directory per experiment:
+
+```text
+my_project/outputs/
+```
+
+All stages write distinct artifact names into that directory. This makes batch
+runs resumable without creating a new folder for every batch.
+
+For stages with `--limit` and `--force`:
+
+```text
+--limit 10   process at most 10 unfinished papers in that stage
+--force      ignore existing stage outputs and recompute
+```
+
+By default, completed papers are skipped. Extraction treats `ok:*` and
+`skipped:no_context` as complete; failed extraction statuses are retried on the
+next run. Stage summaries include `processed_this_run` and `skipped_existing`
+when resume mode applies.
+
 ## 0. WOS Metadata Ingestion
 
 When the input starts from a Web of Science tagged-text export, the system
@@ -61,6 +84,9 @@ rejected_papers.jsonl
 run_summary.json
 ```
 
+Resume behavior: existing paper-filter decisions are reused unless `--force` is
+passed. `--limit N` counts only papers without an existing decision.
+
 This follows the ALLMAT idea of title/abstract-level paper classification, but
 makes the filter configurable for non-HEA domains.
 
@@ -92,6 +118,9 @@ fulltext_acquisition_summary.json
 pmc_xml/
 ```
 
+Resume behavior: existing acquisition rows are reused unless `--force` is
+passed. `--limit N` counts only papers without an existing acquisition result.
+
 If the user already has local JATS/XML files, this stage can be skipped.
 
 ## 3. Article Processing
@@ -116,6 +145,9 @@ Main outputs:
 parsed_chunks.jsonl
 preprocessing_summary.json
 ```
+
+Resume behavior: papers already present in `parsed_chunks.jsonl` are skipped.
+`--force` reparses them, and `--limit N` counts only unparsed papers.
 
 Table chunks preserve caption, headers, raw rows, and a text representation for
 retrieval and LLM labeling.
@@ -142,6 +174,10 @@ Main output:
 ```text
 labeled_chunks.jsonl
 ```
+
+Resume behavior: papers already represented in `labeled_chunks.jsonl` or
+`labeling_summary.json` are skipped. `--force` rebuilds labels for the selected
+papers.
 
 Each output row is chunk-centric:
 
@@ -188,6 +224,10 @@ When a preset enables strict endpoint constraints, canonicalize/filtering is
 performed before deduplication. `extraction_summary.json` reports rejected
 record-type/endpoint combinations by paper and in total.
 
+Resume behavior: completed papers are skipped; failed papers are automatically
+retried. After each paper, `extracted_records.jsonl` is checkpointed so an
+interrupted batch can continue without losing completed records.
+
 ## 6. Post-Processing
 
 Post-processing makes extracted JSONL easier to analyze.
@@ -212,6 +252,9 @@ records.csv
 postprocessing_summary.json
 ```
 
+Post-processing is deterministic and cheap, so it rewrites its outputs from the
+current `extracted_records.jsonl` rather than keeping per-paper resume state.
+
 ## Current Scope
 
 Implemented:
@@ -225,6 +268,7 @@ labeling
 contextualized extraction
 lightweight post-processing
 domain presets
+resumable stage-level batches
 ```
 
 Deferred:
@@ -233,6 +277,6 @@ Deferred:
 ALLMAT-style DetectProcesses/template injection
 advanced entity resolution
 downstream ML dataset construction
-cross-run database / batch management
+external database / batch dashboard
 large-scale evaluation
 ```

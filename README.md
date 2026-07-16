@@ -85,10 +85,68 @@ LLM_BASE_URL      OpenAI-compatible API base URL
 LLM_MODEL         chat model name
 GEMINI_API_KEY    Google AI Studio key for Gemini embeddings
 EMBEDDING_MODEL   gemini-embedding-001
+EXTRACTOR_MAX_TOKENS=4000
 ```
 
 `NCBI_EMAIL` is optional but recommended for DOI/PMID to PMCID lookup. Never
 commit the real `.env` file.
+
+For extraction, `EXTRACTOR_TIMEOUT` defaults to 90 seconds and
+`EXTRACTOR_MAX_RETRIES` defaults to 0. A timed-out paper is recorded as failed
+and the batch continues; completed papers are checkpointed to
+`extracted_records.jsonl` after each paper.
+
+Batch runs are resumable by default:
+
+- Reuse one output directory, for example `my_project/outputs`.
+- `--limit 10` means "process at most 10 unfinished papers in this stage".
+- Successfully completed papers are skipped on later runs.
+- Failed extraction papers are retried on later runs.
+- `--force` recomputes a stage instead of skipping existing results.
+
+You can change `--limit` freely. If the first 10 papers are already complete,
+the next `--limit 10` run continues with the next unfinished papers.
+
+## Fast Start: Local XML Batch
+
+Use this when you already have JATS/PMC XML files. Keep every stage in the same
+output directory so later batches extend the previous results instead of
+creating isolated folders.
+
+```bash
+python run_paper_filter.py \
+  --requirements my_project/user_requirements.yaml \
+  --input my_project/input_papers \
+  --output my_project/outputs \
+  --limit 10
+
+python run_preprocess.py \
+  --passed my_project/outputs/passed_papers.jsonl \
+  --output my_project/outputs \
+  --limit 10
+
+python run_labeling.py \
+  --requirements my_project/user_requirements.yaml \
+  --chunks my_project/outputs/parsed_chunks.jsonl \
+  --output my_project/outputs \
+  --domain pancan_treatment_outcomes \
+  --limit 10
+
+python run_extraction.py \
+  --requirements my_project/user_requirements.yaml \
+  --chunks my_project/outputs/parsed_chunks.jsonl \
+  --labels my_project/outputs/labeled_chunks.jsonl \
+  --output my_project/outputs \
+  --limit 10
+
+python run_postprocess.py \
+  --requirements my_project/user_requirements.yaml \
+  --records my_project/outputs/extracted_records.jsonl \
+  --output my_project/outputs
+```
+
+Replace `--domain pancan_treatment_outcomes` with the `project_name` in your
+`user_requirements.yaml`.
 
 ## Quick Test: WOS Metadata Route
 
@@ -97,16 +155,18 @@ Use this route when the input is a Web of Science `savedrecs.txt` file.
 ```bash
 python run_wos_ingest.py \
   --input my_project/savedrecs.txt \
-  --output my_project/output/wos_ingest
+  --output my_project/outputs
 
 python run_paper_filter.py \
   --requirements examples/pancan_treatment_outcomes/user_requirements.yaml \
-  --metadata my_project/output/wos_ingest/candidate_papers.jsonl \
-  --output my_project/output/paper_filter
+  --metadata my_project/outputs/candidate_papers.jsonl \
+  --output my_project/outputs \
+  --limit 10
 
 python run_fulltext_acquisition.py \
-  --passed my_project/output/paper_filter/passed_papers.jsonl \
-  --output my_project/output/fulltext
+  --passed my_project/outputs/passed_papers.jsonl \
+  --output my_project/outputs \
+  --limit 10
 ```
 
 At this point the system has filtered papers and downloaded available PMC XML.
@@ -117,25 +177,28 @@ Continue the full pipeline:
 
 ```bash
 python run_preprocess.py \
-  --passed my_project/output/fulltext/downloaded_papers.jsonl \
-  --output my_project/output/preprocess
+  --passed my_project/outputs/downloaded_papers.jsonl \
+  --output my_project/outputs \
+  --limit 10
 
 python run_labeling.py \
   --requirements examples/pancan_treatment_outcomes/user_requirements.yaml \
-  --chunks my_project/output/preprocess/parsed_chunks.jsonl \
-  --output my_project/output/labeling \
-  --domain pancan_treatment_outcomes
+  --chunks my_project/outputs/parsed_chunks.jsonl \
+  --output my_project/outputs \
+  --domain pancan_treatment_outcomes \
+  --limit 10
 
 python run_extraction.py \
   --requirements examples/pancan_treatment_outcomes/user_requirements.yaml \
-  --chunks my_project/output/preprocess/parsed_chunks.jsonl \
-  --labels my_project/output/labeling/labeled_chunks.jsonl \
-  --output my_project/output/extraction
+  --chunks my_project/outputs/parsed_chunks.jsonl \
+  --labels my_project/outputs/labeled_chunks.jsonl \
+  --output my_project/outputs \
+  --limit 10
 
 python run_postprocess.py \
   --requirements examples/pancan_treatment_outcomes/user_requirements.yaml \
-  --records my_project/output/extraction/extracted_records.jsonl \
-  --output my_project/output/postprocess
+  --records my_project/outputs/extracted_records.jsonl \
+  --output my_project/outputs
 ```
 
 ## Quick Test: Local XML Route
@@ -146,11 +209,13 @@ Use this route when the input is already a folder of JATS/XML files.
 python run_paper_filter.py \
   --requirements examples/pancan_treatment_outcomes/user_requirements.yaml \
   --input my_project/input_papers \
-  --output my_project/output/paper_filter
+  --output my_project/outputs \
+  --limit 10
 
 python run_preprocess.py \
-  --passed my_project/output/paper_filter/passed_papers.jsonl \
-  --output my_project/output/preprocess
+  --passed my_project/outputs/passed_papers.jsonl \
+  --output my_project/outputs \
+  --limit 10
 ```
 
 Then run labeling, extraction, and post-processing using the same commands shown
@@ -182,6 +247,8 @@ policy, extraction helpers, and post-processing:
 ```bash
 python test_wos_metadata_basic.py
 python test_paper_filter_basic.py
+python test_resume_basic.py
+python test_labeling_basic.py
 python test_extraction_basic.py
 python test_postprocess_basic.py
 ```

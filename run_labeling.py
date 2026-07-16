@@ -100,6 +100,17 @@ def main():
         action="store_true",
         help="Do not auto-load presets/<project_name>/labeling_config.yaml"
     )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Process at most N new papers. In resume mode, already labeled papers are skipped first."
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Reprocess papers even if labeled_chunks.jsonl already contains results."
+    )
 
     args = parser.parse_args()
 
@@ -132,6 +143,8 @@ def main():
             config_path=args.config,  # 传入 --config 参数
             preset_dir=args.preset_dir,
             use_presets=not args.no_presets,
+            limit=args.limit,
+            resume=not args.force,
         )
 
         logger.info("\n✅ Labeling completed successfully!")

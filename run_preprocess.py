@@ -55,7 +55,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--limit", type=int, metavar="N",
-        help="Process only the first N papers (smoke-test mode).",
+        help="Process at most N new papers. In resume mode, already parsed papers are skipped first.",
+    )
+    parser.add_argument(
+        "--force", action="store_true",
+        help="Reprocess papers even if parsed_chunks.jsonl already contains results.",
     )
     parser.add_argument(
         "--verbose", "-v", action="store_true",
@@ -95,6 +99,7 @@ def main(argv: list[str] | None = None) -> int:
         passed_papers_path=passed_path,
         output_dir=args.output,
         limit=args.limit,
+        resume=not args.force,
     )
 
     print(

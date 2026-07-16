@@ -2,7 +2,7 @@ version: 1
 description: >
   Post-processing preset for pancreatic cancer drug-development evidence records.
   It performs light normalization for record type, common endpoints, routes, and
-  generic numeric values while preserving original extraction wording.
+  conservative numeric values while preserving original extraction wording.
 
 null_values:
   - not specified
@@ -15,9 +15,11 @@ numeric_fields:
   value:
     detect_unit: true
     parse_ranges: true
+    unit_from_field: unit
   dose:
     detect_unit: true
     parse_ranges: true
+    allow_multiple_numbers: true
   duration:
     detect_unit: true
     parse_ranges: true
@@ -25,9 +27,6 @@ numeric_fields:
     integer: true
     detect_unit: false
     parse_ranges: false
-  statistics:
-    detect_unit: false
-    parse_ranges: true
 
 standardize:
   record_type:

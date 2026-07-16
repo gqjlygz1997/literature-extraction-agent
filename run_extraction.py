@@ -56,6 +56,10 @@ def main():
                         help="Directory containing project presets (default: ./presets)")
     parser.add_argument("--no-presets", action="store_true",
                         help="Do not auto-load presets/<project_name>/extraction_prompt.yaml")
+    parser.add_argument("--limit", type=int, default=None,
+                        help="Process at most N new papers. In resume mode, already extracted papers are skipped first.")
+    parser.add_argument("--force", action="store_true",
+                        help="Reprocess papers even if extracted_records.jsonl already contains results.")
     args = parser.parse_args()
 
     # 验证输入文件
@@ -84,6 +88,8 @@ def main():
             prompt_preset_path=args.prompt_preset,
             preset_dir=args.preset_dir,
             use_presets=not args.no_presets,
+            limit=args.limit,
+            resume=not args.force,
         )
 
         logger.info("\n✅ Extraction completed!")

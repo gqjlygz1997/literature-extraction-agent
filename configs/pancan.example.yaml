@@ -1,0 +1,53 @@
+domain_name: pancan_treatment_outcomes
+domain_description: >
+  Extract treatment regimens and survival or efficacy outcomes from local
+  full-text pancreatic cancer clinical treatment papers.
+
+target_fields:
+  - name: treatment_regimen
+    description: Treatment or intervention name, such as chemotherapy, immunotherapy, surgery, neoadjuvant therapy, adjuvant therapy, or combination treatment.
+    final_type: string
+  - name: patient_group
+    description: Patient group or trial arm, such as treatment arm, cohort, subgroup, or a specific patient population.
+    final_type: string
+  - name: os
+    description: OS = overall survival. Prefer median OS, usually reported in months.
+    final_type: number
+  - name: pfs
+    description: PFS = progression-free survival. Prefer median PFS, usually reported in months.
+    final_type: number
+  - name: orr
+    description: ORR = objective response rate, usually reported as a percentage.
+    final_type: number
+  - name: evidence_sentence
+    description: Verbatim evidence sentence supporting the extracted record. Do not paraphrase.
+    final_type: string
+
+field_definitions:
+  treatment_regimen: Treatment or intervention name, such as chemotherapy, immunotherapy, surgery, neoadjuvant therapy, adjuvant therapy, or combination treatment.
+  patient_group: Patient group or trial arm, such as treatment arm, cohort, subgroup, or a specific patient population.
+  os: OS = overall survival. Prefer median OS, usually reported in months.
+  pfs: PFS = progression-free survival. Prefer median PFS, usually reported in months.
+  orr: ORR = objective response rate, usually reported as a percentage.
+  evidence_sentence: Verbatim evidence sentence supporting the extracted record. Do not paraphrase.
+
+paper_filter:
+  input_scope: title_and_abstract
+  inclusive_when_uncertain: true
+  pass_condition: all_required_not_false
+  criteria:
+    - name: is_pancreatic_cancer
+      question: Is this paper likely about pancreatic cancer in human patients?
+      expected_answer: true
+      rationale: Exclude papers on unrelated cancer types or non-cancer topics.
+      required: true
+    - name: is_clinical_treatment_study
+      question: Is this likely a primary clinical treatment study rather than a review, mechanism-only study, or animal-only study?
+      expected_answer: true
+      rationale: Keep human clinical studies and reject clearly irrelevant article types.
+      required: true
+    - name: may_report_treatment_outcomes
+      question: Might this paper report treatment regimens together with survival or efficacy outcomes such as OS, PFS, ORR, DCR, HR, or median survival?
+      expected_answer: true
+      rationale: Coarse early check for the information needed by later extraction.
+      required: true

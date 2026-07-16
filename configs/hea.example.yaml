@@ -1,0 +1,54 @@
+domain_name: hea_mechanical_properties
+domain_description: >
+  Extract composition, processing history, phase structure, grain size, and
+  mechanical properties from local high-entropy alloy or compositionally complex
+  alloy papers.
+
+target_fields:
+  - name: composition
+    description: Alloy composition, including elements and composition ratios, such as atomic percent or weight percent.
+    final_type: string
+  - name: processes
+    description: Processing history in chronological order, including melting, casting, homogenization, rolling, annealing, quenching, and related parameters.
+    final_type: list
+  - name: phase
+    description: Phase structure, such as FCC, BCC, HCP, B2, Laves phase, or intermetallic phase.
+    final_type: list
+  - name: grain_size
+    description: Average grain size with unit, such as micrometer, nanometer, um, or nm.
+    final_type: string
+  - name: ys
+    description: YS = yield strength, usually reported in MPa.
+    final_type: number
+  - name: uts
+    description: UTS = ultimate tensile strength or ultimate compressive strength, usually reported in MPa.
+    final_type: number
+
+field_definitions:
+  composition: Alloy composition, including elements and composition ratios, such as atomic percent or weight percent.
+  processes: Processing history in chronological order, including melting, casting, homogenization, rolling, annealing, quenching, and related parameters.
+  phase: Phase structure, such as FCC, BCC, HCP, B2, Laves phase, or intermetallic phase.
+  grain_size: Average grain size with unit, such as micrometer, nanometer, um, or nm.
+  ys: YS = yield strength, usually reported in MPa.
+  uts: UTS = ultimate tensile strength or ultimate compressive strength, usually reported in MPa.
+
+paper_filter:
+  input_scope: title_and_abstract
+  inclusive_when_uncertain: true
+  pass_condition: all_required_not_false
+  criteria:
+    - name: is_high_entropy_alloy
+      question: Is this paper likely about high-entropy alloys or compositionally complex alloys?
+      expected_answer: true
+      rationale: Exclude papers outside the HEA / CCA domain.
+      required: true
+    - name: is_experimental_study
+      question: Is this likely an experimental study rather than only simulation, theory, or review?
+      expected_answer: true
+      rationale: Keep papers that can report measured material properties.
+      required: true
+    - name: reports_target_properties
+      question: Might this paper report composition, processing, phase, grain size, or mechanical properties?
+      expected_answer: true
+      rationale: Coarse early check for papers useful to later extraction.
+      required: true

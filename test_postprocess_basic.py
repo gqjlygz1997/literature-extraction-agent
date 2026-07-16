@@ -51,6 +51,26 @@ def test_parse_numeric_value():
     assert duration_hours["value"] == 72.0
     assert duration_hours["unit"] == "h"
 
+    reported_range = parse_numeric_value("17.1 (0.6-61.9) months")
+    assert reported_range["operator"] == "reported_with_range"
+    assert reported_range["value"] == 17.1
+    assert reported_range["value_min"] == 0.6
+    assert reported_range["value_max"] == 61.9
+    assert reported_range["unit"] == "month"
+
+    plus_minus = parse_numeric_value("5.8 ± 31.1")
+    assert plus_minus["operator"] == "plus_minus"
+    assert plus_minus["value"] == 5.8
+    assert plus_minus["error"] == 31.1
+    assert plus_minus["value_min"] is None
+    assert plus_minus["value_max"] is None
+
+    dose = parse_numeric_value("120 mg/m2 for 30 min", allow_multiple_numbers=True)
+    assert dose["value"] == 120.0
+    assert dose["unit"] == "mg/m2"
+
+    assert parse_numeric_value("liver 7 (33%), lung 2 (10%)") is None
+
     print("  ✓ 数值解析正确")
     return True
 
@@ -207,6 +227,7 @@ validity:
         assert (output_dir / "postprocessed_records.jsonl").exists()
         assert (output_dir / "records.csv").exists()
         assert (output_dir / "postprocessing_summary.json").exists()
+        assert (output_dir / "records.csv").read_bytes().startswith(b"\xef\xbb\xbf")
 
         row = json.loads((output_dir / "postprocessed_records.jsonl").read_text(encoding="utf-8").strip())
         assert row["outcome_norm"]["value"] == 15.0
@@ -296,8 +317,7 @@ def test_pancan_preset_examples():
     assert row["value_norm"]["unit"] == "uM"
     assert row["duration_norm"]["value"] == 72.0
     assert row["duration_norm"]["unit"] == "h"
-    assert row["statistics_norm"]["operator"] == "<"
-    assert row["statistics_norm"]["value"] == 0.001
+    assert "statistics_norm" not in row
     # r0002（缺 record_type / model_or_population）和 r0003（全空）都应被 required_all 过滤
     assert summary["invalid_removed"] == 2
     kept_ids = {r["record_id"] for r in rows}

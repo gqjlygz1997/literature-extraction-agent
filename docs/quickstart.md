@@ -3,6 +3,10 @@
 This quickstart runs the pipeline stage by stage. Paths are examples; replace
 them with your own project folder and corpus.
 
+Use one output directory for the whole pipeline, for example
+`my_project/outputs`. Each stage writes different file names, so incremental
+batches can reuse the same directory safely.
+
 ## 1. Install
 
 ```bash
@@ -25,6 +29,10 @@ LLM_API_KEY       OpenAI-compatible chat model API key
 LLM_BASE_URL      OpenAI-compatible API base URL, for example https://api.moonshot.cn/v1
 LLM_MODEL         chat model name, for example kimi-k2.6
 LLM_TEMPERATURE   default: 0.6
+
+EXTRACTOR_MAX_TOKENS=4000
+EXTRACTOR_TIMEOUT=90
+EXTRACTOR_MAX_RETRIES=0
 
 GEMINI_API_KEY    Google AI Studio key for Gemini embeddings
 EMBEDDING_PROVIDER=gemini
@@ -77,6 +85,21 @@ presets/<project_name>/
 
 where `<project_name>` matches the value in `user_requirements.yaml`.
 
+## 2.1 Batch and Resume Rules
+
+Every expensive stage is resumable by default. The practical rule is:
+
+```text
+same output directory + --limit 10 = run the next 10 unfinished papers
+```
+
+- Completed papers are skipped on later runs.
+- Failed extraction papers are retried on later runs.
+- `--limit` can be any number or omitted to process all unfinished papers.
+- `--force` recomputes that stage instead of skipping existing results.
+- If you change prompts, presets, model settings, or parsed input, use
+  `--force` for the affected downstream stage.
+
 ## 3. WOS Metadata Ingestion
 
 Skip this stage if you already have local XML files.
@@ -84,13 +107,13 @@ Skip this stage if you already have local XML files.
 ```bash
 python run_wos_ingest.py \
   --input my_project/savedrecs.txt \
-  --output my_project/output/wos_ingest
+  --output my_project/outputs
 ```
 
 Main output:
 
 ```text
-my_project/output/wos_ingest/candidate_papers.jsonl
+my_project/outputs/candidate_papers.jsonl
 ```
 
 ## 4. Paper Filter
@@ -100,8 +123,9 @@ From WOS metadata:
 ```bash
 python run_paper_filter.py \
   --requirements my_project/user_requirements.yaml \
-  --metadata my_project/output/wos_ingest/candidate_papers.jsonl \
-  --output my_project/output/paper_filter
+  --metadata my_project/outputs/candidate_papers.jsonl \
+  --output my_project/outputs \
+  --limit 10
 ```
 
 From local XML files:
@@ -110,13 +134,14 @@ From local XML files:
 python run_paper_filter.py \
   --requirements my_project/user_requirements.yaml \
   --input my_project/input_papers \
-  --output my_project/output/paper_filter
+  --output my_project/outputs \
+  --limit 10
 ```
 
 Main output:
 
 ```text
-my_project/output/paper_filter/passed_papers.jsonl
+my_project/outputs/passed_papers.jsonl
 ```
 
 For the pancreatic-cancer preset, papers that are clearly biomarker-only,
@@ -131,15 +156,16 @@ to PMCID and downloads available PMC XML.
 
 ```bash
 python run_fulltext_acquisition.py \
-  --passed my_project/output/paper_filter/passed_papers.jsonl \
-  --output my_project/output/fulltext
+  --passed my_project/outputs/passed_papers.jsonl \
+  --output my_project/outputs \
+  --limit 10
 ```
 
 Main output:
 
 ```text
-my_project/output/fulltext/downloaded_papers.jsonl
-my_project/output/fulltext/pmc_xml/
+my_project/outputs/downloaded_papers.jsonl
+my_project/outputs/pmc_xml/
 ```
 
 Skip this stage if `passed_papers.jsonl` already points to local XML files.
@@ -150,22 +176,24 @@ After WOS acquisition:
 
 ```bash
 python run_preprocess.py \
-  --passed my_project/output/fulltext/downloaded_papers.jsonl \
-  --output my_project/output/preprocess
+  --passed my_project/outputs/downloaded_papers.jsonl \
+  --output my_project/outputs \
+  --limit 10
 ```
 
 After local XML paper filtering:
 
 ```bash
 python run_preprocess.py \
-  --passed my_project/output/paper_filter/passed_papers.jsonl \
-  --output my_project/output/preprocess
+  --passed my_project/outputs/passed_papers.jsonl \
+  --output my_project/outputs \
+  --limit 10
 ```
 
 Main output:
 
 ```text
-my_project/output/preprocess/parsed_chunks.jsonl
+my_project/outputs/parsed_chunks.jsonl
 ```
 
 ## 7. Labeling
@@ -173,14 +201,16 @@ my_project/output/preprocess/parsed_chunks.jsonl
 ```bash
 python run_labeling.py \
   --requirements my_project/user_requirements.yaml \
-  --chunks my_project/output/preprocess/parsed_chunks.jsonl \
-  --output my_project/output/labeling
+  --chunks my_project/outputs/parsed_chunks.jsonl \
+  --output my_project/outputs \
+  --domain YOUR_PROJECT_NAME \
+  --limit 10
 ```
 
 Main output:
 
 ```text
-my_project/output/labeling/labeled_chunks.jsonl
+my_project/outputs/labeled_chunks.jsonl
 ```
 
 ## 8. Extraction
@@ -188,15 +218,16 @@ my_project/output/labeling/labeled_chunks.jsonl
 ```bash
 python run_extraction.py \
   --requirements my_project/user_requirements.yaml \
-  --chunks my_project/output/preprocess/parsed_chunks.jsonl \
-  --labels my_project/output/labeling/labeled_chunks.jsonl \
-  --output my_project/output/extraction
+  --chunks my_project/outputs/parsed_chunks.jsonl \
+  --labels my_project/outputs/labeled_chunks.jsonl \
+  --output my_project/outputs \
+  --limit 10
 ```
 
 Main output:
 
 ```text
-my_project/output/extraction/extracted_records.jsonl
+my_project/outputs/extracted_records.jsonl
 ```
 
 Some domain prompt presets also apply local constraints after extraction. The
@@ -208,15 +239,15 @@ for example `clearance` for `pk` rather than `clinical_outcome`.
 ```bash
 python run_postprocess.py \
   --requirements my_project/user_requirements.yaml \
-  --records my_project/output/extraction/extracted_records.jsonl \
-  --output my_project/output/postprocess
+  --records my_project/outputs/extracted_records.jsonl \
+  --output my_project/outputs
 ```
 
 Main outputs:
 
 ```text
-my_project/output/postprocess/postprocessed_records.jsonl
-my_project/output/postprocess/records.csv
+my_project/outputs/postprocessed_records.jsonl
+my_project/outputs/records.csv
 ```
 
 ## Notes
@@ -225,5 +256,7 @@ my_project/output/postprocess/records.csv
 - Local XML/PDF papers should stay outside git.
 - Presets are source files and should be committed.
 - `.env` files should never be committed.
-- Use a new output directory for every batch run to preserve previous generated
-  artifacts.
+- Reuse the same output directories for incremental batches. By default the
+  pipeline skips papers already present in the stage output; use `--limit 10`
+  to process the next 10 unfinished papers, and `--force` only when you
+  intentionally want to recompute a stage.

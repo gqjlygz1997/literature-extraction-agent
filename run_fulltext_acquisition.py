@@ -48,7 +48,14 @@ def _build_parser() -> argparse.ArgumentParser:
         default=os.environ.get("NCBI_EMAIL", ""),
         help="Optional email for NCBI requests; can also use NCBI_EMAIL.",
     )
-    parser.add_argument("--limit", type=int, metavar="N")
+    parser.add_argument(
+        "--limit", type=int, metavar="N",
+        help="Process at most N new papers. In resume mode, already acquired papers are skipped first.",
+    )
+    parser.add_argument(
+        "--force", action="store_true",
+        help="Reprocess acquisition rows even if output files already contain results.",
+    )
     parser.add_argument("--sleep", type=float, default=0.34, help="Delay between NCBI requests.")
     parser.add_argument("--verbose", "-v", action="store_true")
     return parser
@@ -85,6 +92,7 @@ def main(argv: list[str] | None = None) -> int:
         email=args.email,
         sleep_seconds=args.sleep,
         limit=args.limit,
+        resume=not args.force,
     )
 
     print(

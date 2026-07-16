@@ -31,6 +31,7 @@ def acquire_pmc_xml(
     tool: str = "literature-extraction-agent",
     sleep_seconds: float = 0.34,
     limit: int | None = None,
+    resume: bool = True,
 ) -> dict:
     """Resolve passed metadata rows to PMCID and download available PMC XML."""
 
@@ -38,9 +39,29 @@ def acquire_pmc_xml(
     xml_dir = output_dir / "pmc_xml"
     xml_dir.mkdir(parents=True, exist_ok=True)
 
-    rows = passed_rows[:limit] if limit else list(passed_rows)
-    results: list[dict] = []
-    downloaded_rows: list[dict] = []
+    results_path = output_dir / "fulltext_acquisition_results.jsonl"
+    downloaded_path = output_dir / "downloaded_papers.jsonl"
+    existing_results = _read_jsonl_if_exists(results_path) if resume else []
+    existing_downloaded_rows = _read_jsonl_if_exists(downloaded_path) if resume else []
+    done_index = _identity_index(
+        [row for row in existing_results if row.get("status") != "error"]
+    )
+
+    rows = list(passed_rows)
+    if resume and done_index:
+        rows = [row for row in rows if not (_identity_values(row) & done_index)]
+    if limit:
+        rows = rows[:limit]
+    pending_index = _identity_index(rows)
+    if pending_index:
+        existing_results = [
+            row for row in existing_results
+            if not (_identity_values(row) & pending_index)
+        ]
+
+    results: list[dict] = list(existing_results)
+    new_results: list[dict] = []
+    downloaded_rows: list[dict] = list(existing_downloaded_rows)
 
     for row in rows:
         result = _process_one(
@@ -49,23 +70,28 @@ def acquire_pmc_xml(
             email=email,
             tool=tool,
         )
+        new_results.append(result)
         results.append(result)
         if result["status"] == "downloaded" or result["status"] == "already_exists":
             downloaded_rows.append(_to_downloaded_paper_row(row, result))
         if sleep_seconds > 0:
             time.sleep(sleep_seconds)
 
-    _write_jsonl(output_dir / "fulltext_acquisition_results.jsonl", results)
-    _write_jsonl(output_dir / "downloaded_papers.jsonl", downloaded_rows)
+    downloaded_rows = _dedupe_rows(downloaded_rows)
+
+    _write_jsonl(results_path, results)
+    _write_jsonl(downloaded_path, downloaded_rows)
 
     summary = {
-        "total": len(rows),
+        "total": len(results),
+        "processed_this_run": len(new_results),
+        "previously_processed": len(existing_results),
         "downloaded": sum(1 for r in results if r["status"] == "downloaded"),
         "already_exists": sum(1 for r in results if r["status"] == "already_exists"),
         "no_pmcid": sum(1 for r in results if r["status"] == "no_pmcid"),
         "xml_unavailable": sum(1 for r in results if r["status"] == "xml_unavailable"),
         "error": sum(1 for r in results if r["status"] == "error"),
-        "downloaded_papers_path": str((output_dir / "downloaded_papers.jsonl").resolve()),
+        "downloaded_papers_path": str(downloaded_path.resolve()),
         "xml_dir": str(xml_dir.resolve()),
     }
     with open(output_dir / "fulltext_acquisition_summary.json", "w", encoding="utf-8") as fh:
@@ -267,6 +293,48 @@ def _get_text(url: str) -> str:
             return response.read().decode("utf-8", errors="replace")
     except urllib.error.HTTPError as exc:
         raise RuntimeError(f"HTTP {exc.code} for {url}") from exc
+
+
+def _read_jsonl_if_exists(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    rows: list[dict] = []
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if line:
+                rows.append(json.loads(line))
+    return rows
+
+
+def _identity_values(row: dict) -> set[str]:
+    values: set[str] = set()
+    for key in ("paper_id", "pmcid", "pmid", "doi", "wos_uid", "source_path", "source_file"):
+        text = str(row.get(key) or "").strip()
+        if text:
+            values.add(text)
+    return values
+
+
+def _identity_index(rows: list[dict]) -> set[str]:
+    values: set[str] = set()
+    for row in rows:
+        values.update(_identity_values(row))
+    return values
+
+
+def _dedupe_rows(rows: list[dict]) -> list[dict]:
+    seen: set[str] = set()
+    deduped: list[dict] = []
+    for row in rows:
+        identities = _identity_values(row)
+        key = next(iter(sorted(identities)), "")
+        if key and key in seen:
+            continue
+        if key:
+            seen.add(key)
+        deduped.append(row)
+    return deduped
 
 
 def _write_jsonl(path: Path, rows: list[dict]) -> None:

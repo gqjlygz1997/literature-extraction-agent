@@ -93,6 +93,10 @@ def extract_records(
         except Exception as e:
             last_error = e
             logger.warning(f"{method} extraction failed: {e}")
+            if _is_transport_error(e):
+                # A second output mode cannot fix a DNS, connection, or timeout
+                # failure. Avoid multiplying a stalled request into minutes of waits.
+                break
 
     err_type = type(last_error).__name__ if last_error else "UnknownError"
     logger.error(f"Extraction failed ({err_type}): {last_error}")
@@ -194,6 +198,17 @@ def _coerce_record_values_to_strings(data: dict) -> dict:
     return data
 
 
+def _is_transport_error(error: Exception) -> bool:
+    """Return True when retrying with a different output mode cannot help."""
+    try:
+        from openai import APIConnectionError, APITimeoutError
+
+        transport_errors = (APIConnectionError, APITimeoutError, TimeoutError)
+    except ImportError:  # pragma: no cover - openai is an extractor dependency
+        transport_errors = (TimeoutError,)
+    return isinstance(error, transport_errors)
+
+
 def _mock_extract_records(context_str: str, records_model) -> list[dict]:
     """Deterministic smoke-test extractor used only when EXTRACTOR_MOCK=1."""
     schema = records_model.model_json_schema()
@@ -258,6 +273,9 @@ def _build_llm(model_name: str | None):
         "temperature": temperature,
         "timeout": float(os.environ.get("EXTRACTOR_TIMEOUT", "90")),
         "max_tokens": int(os.environ.get("EXTRACTOR_MAX_TOKENS", "4000")),
+        # Kimi/OpenAI clients otherwise retry timeouts twice internally. A single
+        # stalled request would then block a paper for 3 x timeout per mode.
+        "max_retries": int(os.environ.get("EXTRACTOR_MAX_RETRIES", "0")),
     }
     if base_url:
         kwargs["base_url"] = base_url
