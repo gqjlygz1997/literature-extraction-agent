@@ -21,6 +21,22 @@ def test_build_records_model():
     assert record_schema.get("additionalProperties") is False
 
 
+def test_records_model_accepts_numeric_scalars_before_string_export():
+    from src.agent.extraction_schema import build_records_model
+    from src.agent.tools.extractor import _records_to_dicts, _coerce_records_to_strings
+
+    records_model = build_records_model([
+        {"name": "sample_size", "definition": "Sample size", "type": "string"},
+        {"name": "value", "definition": "Value", "type": "string"},
+    ])
+    validated = records_model.model_validate({
+        "records": [{"sample_size": 2959, "value": 29}]
+    })
+    rows = _coerce_records_to_strings(_records_to_dicts(validated))
+
+    assert rows == [{"sample_size": "2959", "value": "29"}]
+
+
 def test_create_instruction_is_domain_neutral():
     from src.agent.extraction_schema import create_instruction
 
@@ -97,6 +113,84 @@ def test_context_truncation_keeps_abstract():
         cb.MAX_CONTEXT_CHARS = previous
 
 
+def test_context_adds_unlabeled_numeric_endpoint_evidence():
+    from src.agent.tools.context_builder import build_context
+
+    chunks = {
+        "a1": {
+            "paper_id": "P1",
+            "chunk_id": "a1",
+            "chunk_type": "abstract",
+            "text": "A pancreatic cancer drug study.",
+            "section_path": ["Abstract"],
+            "metadata": {"chunk_index": 0},
+        },
+        "p1": {
+            "paper_id": "P1",
+            "chunk_id": "p1",
+            "chunk_type": "paragraph",
+            "text": "General mechanism text without a concrete endpoint value.",
+            "section_path": ["Results"],
+            "metadata": {"chunk_index": 1},
+        },
+        "p2": {
+            "paper_id": "P1",
+            "chunk_id": "p2",
+            "chunk_type": "paragraph",
+            "text": "The IC50 values ranged from 3 to 10 uM across PDAC cells.",
+            "section_path": ["Results"],
+            "metadata": {"chunk_index": 2},
+        },
+    }
+    context, used = build_context("P1", chunks, {"p1"})
+
+    assert "p2" in used
+    assert "IC50 values ranged from 3 to 10 uM" in context
+
+
+def test_record_source_chunk_selection_prefers_matching_evidence():
+    from src.agent.tools.context_builder import select_record_source_chunk_ids
+
+    chunks = {
+        "a1": {
+            "paper_id": "P1",
+            "chunk_id": "a1",
+            "chunk_type": "abstract",
+            "text": "Drug A was studied in pancreatic cancer.",
+            "section_path": ["Abstract"],
+            "metadata": {"chunk_index": 0},
+        },
+        "p1": {
+            "paper_id": "P1",
+            "chunk_id": "p1",
+            "chunk_type": "paragraph",
+            "text": "The total registry cohort contained 263,886 patients.",
+            "section_path": ["Results"],
+            "metadata": {"chunk_index": 1},
+        },
+        "p2": {
+            "paper_id": "P1",
+            "chunk_id": "p2",
+            "chunk_type": "paragraph",
+            "text": "Drug A improved median OS to 10.60 months compared with control.",
+            "section_path": ["Results"],
+            "metadata": {"chunk_index": 2},
+        },
+    }
+    selected = select_record_source_chunk_ids(
+        {
+            "compound_or_treatment": "Drug A",
+            "endpoint": "OS",
+            "value": "10.60",
+            "unit": "months",
+        },
+        chunks,
+        ["a1", "p1", "p2"],
+        max_chunks=2,
+    )
+    assert selected == ["a1", "p2"]
+
+
 def test_record_cleanup_normalize_and_deduplicate():
     from src.agent.tools.record_cleanup import _normalize, deduplicate
 
@@ -133,6 +227,22 @@ def test_assign_ids_and_field_complement():
     assert row["record_id"] == "PMC123::r0001"
     assert row["treatment_regimen"] is None
     assert row["source_chunk_ids"] == ["c1", "c2"]
+
+
+def test_assign_ids_accepts_per_record_sources():
+    from src.agent.tools.record_cleanup import assign_ids_and_source
+
+    cleaned = assign_ids_and_source(
+        [
+            {"patient_group": "Group A", "os": "12 months"},
+            {"patient_group": "Group B", "os": "18 months"},
+        ],
+        "PMC123",
+        ["patient_group", "os"],
+        [["c1"], ["c2", "c3"]],
+    )
+    assert cleaned[0]["source_chunk_ids"] == ["c1"]
+    assert cleaned[1]["source_chunk_ids"] == ["c2", "c3"]
 
 
 def _strict_constraint():
@@ -245,13 +355,17 @@ def test_extractor_disables_implicit_retries(monkeypatch=None):
 def main():
     tests = [
         test_build_records_model,
+        test_records_model_accepts_numeric_scalars_before_string_export,
         test_create_instruction_is_domain_neutral,
         test_build_system_message_is_domain_neutral,
         test_context_order_and_abstract_inclusion,
         test_context_table_render,
         test_context_truncation_keeps_abstract,
+        test_context_adds_unlabeled_numeric_endpoint_evidence,
+        test_record_source_chunk_selection_prefers_matching_evidence,
         test_record_cleanup_normalize_and_deduplicate,
         test_assign_ids_and_field_complement,
+        test_assign_ids_accepts_per_record_sources,
         test_endpoint_constraint_accepts_compatible_pairs,
         test_endpoint_constraint_rejects_incompatible_pair,
         test_endpoint_constraint_canonicalizes_alias_before_dedupe,

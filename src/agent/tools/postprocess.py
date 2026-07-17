@@ -155,7 +155,8 @@ def parse_numeric_value(
             "unit": unit,
         }
 
-    number_count = len(_measurement_numbers(text))
+    number_matches = _measurement_number_matches(text)
+    number_count = len(number_matches)
     if _only_numeric_content_is_toxicity_grade(text):
         return None
     range_match = _find_range(text) if parse_ranges else None
@@ -191,10 +192,10 @@ def parse_numeric_value(
     elif re.search(r"(^|\s)(~|≈|about|around|approx\.?|approximately)\b", text, re.I):
         operator = "approx"
 
-    number_match = NUMBER_RE.search(text)
-    if not number_match:
+    if not number_matches:
         return None
 
+    number_match = number_matches[0]
     value = float(number_match.group(0))
     value, unit = _convert_one(value, unit, default_unit)
     result = {
@@ -226,13 +227,13 @@ def standardize_value(raw: Any, field_config: dict[str, Any], multiple: bool = F
 
     multiple = bool(field_config.get("multiple", multiple))
     match_mode = str(field_config.get("match", "contains")).lower()
-    aliases: list[tuple[str, str]] = []
+    aliases: list[tuple[str, str, str]] = []
     for canonical, synonyms in terms.items():
-        aliases.append((str(canonical), _compact(canonical)))
+        aliases.append((str(canonical), str(canonical), _compact(canonical)))
         if isinstance(synonyms, str):
             synonyms = [synonyms]
         for synonym in synonyms or []:
-            aliases.append((str(canonical), _compact(synonym)))
+            aliases.append((str(canonical), str(synonym), _compact(synonym)))
 
     if isinstance(value, list):
         return _dedupe_preserve_order(
@@ -242,21 +243,24 @@ def standardize_value(raw: Any, field_config: dict[str, Any], multiple: bool = F
     text = str(value).strip()
     compact_text = _compact(text)
 
-    exact_matches = [canonical for canonical, alias in aliases if compact_text == alias]
+    exact_matches = [
+        canonical for canonical, _alias_text, alias in aliases
+        if compact_text == alias
+    ]
     if exact_matches:
         return exact_matches[0]
 
     if multiple:
         hits = []
-        for canonical, alias in aliases:
-            if alias and alias in compact_text:
+        for canonical, alias_text, alias in aliases:
+            if _alias_matches_text(alias_text, alias, text, compact_text):
                 hits.append(canonical)
         hits = _dedupe_preserve_order(hits)
         return hits if hits else text
 
     if match_mode != "exact":
-        for canonical, alias in aliases:
-            if alias and alias in compact_text:
+        for canonical, alias_text, alias in aliases:
+            if _alias_matches_text(alias_text, alias, text, compact_text):
                 return canonical
     return text
 
@@ -481,18 +485,28 @@ def _find_primary_with_parenthesized_range(text: str) -> tuple[float, float, flo
     return value, lower, upper
 
 
-def _measurement_numbers(text: str) -> list[str]:
-    """Return number tokens while ignoring the 2 in dose units such as mg/m2."""
+def _measurement_number_matches(text: str) -> list[re.Match[str]]:
+    """Return measurement-like number matches, excluding identifier digits.
+
+    This avoids treating terms such as G2 phase, p53, or IC50 as standalone
+    outcome values while still allowing adjacent units like 72h.
+    """
     matches = []
     for match in NUMBER_RE.finditer(text):
+        if match.start() > 0 and text[match.start() - 1].isalpha():
+            continue
         if (
             match.group(0) == "2"
             and match.start() > 0
             and text[match.start() - 1].lower() == "m"
         ):
             continue
-        matches.append(match.group(0))
+        matches.append(match)
     return matches
+
+
+def _measurement_numbers(text: str) -> list[str]:
+    return [match.group(0) for match in _measurement_number_matches(text)]
 
 
 def _only_numeric_content_is_toxicity_grade(text: str) -> bool:
@@ -668,7 +682,7 @@ def _is_valid(row: dict[str, Any], required_all: list[str], required_any: list[s
 def _has_required_numeric_values(row: dict[str, Any], required_numeric_all: list[str]) -> bool:
     for field in required_numeric_all:
         norm = row.get(f"{field}_norm")
-        if not isinstance(norm, dict) or norm.get("value") is None or norm.get("error"):
+        if not isinstance(norm, dict) or norm.get("value") is None:
             return False
     return True
 
@@ -696,6 +710,26 @@ def _dedupe_key_value(record: dict[str, Any], field: str) -> str:
 
 def _compact(value: Any) -> str:
     return re.sub(r"[^a-z0-9]+", "", str(value).lower())
+
+
+def _alias_matches_text(
+    alias_text: str,
+    compact_alias: str,
+    text: str,
+    compact_text: str,
+) -> bool:
+    """Match aliases without letting short abbreviations hit inside words.
+
+    Compact substring matching is useful for phrases such as "overall survival",
+    but short aliases like "CL" must not match unrelated values such as
+    "cell cycle arrest".
+    """
+
+    if not compact_alias:
+        return False
+    if len(compact_alias) <= 3 and compact_alias.isalnum():
+        return re.search(rf"\b{re.escape(alias_text)}\b", text, flags=re.I) is not None
+    return compact_alias in compact_text
 
 
 def _dedupe_preserve_order(values) -> list[Any]:

@@ -19,13 +19,15 @@ from pydantic import BaseModel, ConfigDict, Field, create_model
 
 
 # ---------------------------------------------------------------------------
-# 类型映射（第一版全部 Optional[str]，Stage 3 再做数值规范化）
+# 类型映射（Stage 2 写出前统一转成字符串，Stage 3 再做数值规范化）
 # ---------------------------------------------------------------------------
 
+Stage2Value = str | int | float | bool
+
 _TYPE_MAP: dict[str, type] = {
-    "string": Optional[str],
-    "number": Optional[str],   # Stage 2 保留原始字符串，不做数值解析
-    "list":   Optional[str],
+    "string": Optional[Stage2Value],
+    "number": Optional[Stage2Value],   # Stage 2 保留原始表达，不做数值解析
+    "list":   Optional[Stage2Value],
 }
 
 

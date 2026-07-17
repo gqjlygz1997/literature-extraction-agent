@@ -58,9 +58,14 @@ def main():
                         help="Do not auto-load presets/<project_name>/extraction_prompt.yaml")
     parser.add_argument("--limit", type=int, default=None,
                         help="Process at most N new papers. In resume mode, already extracted papers are skipped first.")
+    parser.add_argument("--paper-id", action="append", default=[],
+                        help="Re-run and replace one paper_id in the existing extraction output. Can be repeated.")
     parser.add_argument("--force", action="store_true",
                         help="Reprocess papers even if extracted_records.jsonl already contains results.")
     args = parser.parse_args()
+
+    if args.paper_id and args.force:
+        parser.error("--paper-id already replaces selected papers; do not combine it with --force.")
 
     # 验证输入文件
     for label, path_str in [
@@ -90,14 +95,24 @@ def main():
             use_presets=not args.no_presets,
             limit=args.limit,
             resume=not args.force,
+            target_paper_ids=args.paper_id,
         )
 
         logger.info("\n✅ Extraction completed!")
         logger.info(f"   Records:          {Path(args.output) / 'extracted_records.jsonl'}")
+        logger.info(f"   This run papers:  {result.get('processed_this_run', 0)}")
+        logger.info(f"   Skipped existing: {result.get('skipped_existing', 0)}")
+        paper_ids = result.get("processed_paper_ids_this_run") or []
+        if paper_ids:
+            logger.info(f"   This run IDs:     {', '.join(paper_ids)}")
+        logger.info(f"   This run raw:     {result.get('records_raw_this_run', 0)}")
+        logger.info(f"   This run cleaned: {result.get('records_after_cleanup_this_run', 0)}")
+        logger.info(f"   This run rejected by endpoint constraints: {result.get('endpoint_constraint_rejected_this_run', 0)}")
+        logger.info(f"   This run duplicates removed: {result.get('duplicates_removed_this_run', 0)}")
         logger.info(f"   Total papers:     {result['total_papers_processed']}")
         logger.info(f"   Failed papers:    {result['total_papers_failed']}")
         logger.info(f"   Total records:    {result['total_records_extracted']}")
-        logger.info(f"   Duplicates removed: {result['duplicates_removed']}")
+        logger.info(f"   Total duplicates removed: {result['duplicates_removed']}")
         return 0
 
     except Exception as e:

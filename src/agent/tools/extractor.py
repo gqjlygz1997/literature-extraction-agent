@@ -89,6 +89,7 @@ def extract_records(
                     method=method,
                 )
                 records = _records_to_dicts(result)
+            records = _coerce_records_to_strings(records)
             return records, "ok" if method == "json_schema" else f"ok:{method}"
         except Exception as e:
             last_error = e
@@ -196,6 +197,11 @@ def _coerce_record_values_to_strings(data: dict) -> dict:
     data = dict(data)
     data["records"] = coerced_records
     return data
+
+
+def _coerce_records_to_strings(records: list[dict]) -> list[dict]:
+    data = _coerce_record_values_to_strings({"records": records})
+    return data.get("records", records)
 
 
 def _is_transport_error(error: Exception) -> bool:

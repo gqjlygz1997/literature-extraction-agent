@@ -72,7 +72,10 @@ record:
       type: string
 
     - name: sample_size
-      definition: Number of cells, animals, samples, or patients if reported.
+      definition: >
+        Arm-specific number of patients, animals, wells, replicates, or samples
+        for this exact endpoint record if reported; leave null when the matching
+        N is unclear.
       type: string
 
     - name: statistics

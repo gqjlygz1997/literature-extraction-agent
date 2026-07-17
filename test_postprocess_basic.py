@@ -79,6 +79,10 @@ def test_parse_numeric_value():
 
     assert parse_numeric_value("liver 7 (33%), lung 2 (10%)") is None
     assert parse_numeric_value("grade 1 hypertension") is None
+    assert parse_numeric_value("increase of G2 phase, decrease of S phase") is None
+    ic50_with_label = parse_numeric_value("IC50 35.25 nM")
+    assert ic50_with_label["value"] == 35.25
+    assert ic50_with_label["unit"] == "nM"
 
     print("  ✓ 数值解析正确")
     return True
@@ -111,6 +115,14 @@ def test_standardize_value():
         },
     }
     assert standardize_value("neoadjuvant therapy followed by surgery", treatment_cfg) == "neoadjuvant therapy followed by surgery"
+
+    endpoint_cfg = {
+        "terms": {
+            "clearance": ["clearance", "CL"],
+        }
+    }
+    assert standardize_value("cell cycle arrest", endpoint_cfg) == "cell cycle arrest"
+    assert standardize_value("CL", endpoint_cfg) == "clearance"
 
     print("  ✓ 同义词标准化正确")
     return True
@@ -371,6 +383,25 @@ def test_pancan_preset_examples():
             "statistics": None,
             "source_chunk_ids": ["c2"],
         },
+        {
+            # G2/S phase 是细胞周期标签，不是 outcome 数值；不能因为 G2 里的 2 进入最终表
+            "paper_id": "PANCAN1",
+            "record_id": "PANCAN1::r0007",
+            "record_type": "in_vitro_efficacy",
+            "compound_or_treatment": "Pro A",
+            "model_or_population": "Panc-1",
+            "assay_or_study_type": "flow cytometry",
+            "endpoint": "cell cycle arrest",
+            "value": "increase of G2 phase, decrease of S phase",
+            "unit": None,
+            "dose": None,
+            "route": None,
+            "duration": None,
+            "comparator_or_control": None,
+            "sample_size": None,
+            "statistics": None,
+            "source_chunk_ids": ["c7"],
+        },
     ]
 
     rows, summary = postprocess_records(records, req.record.fields, config)
@@ -385,17 +416,67 @@ def test_pancan_preset_examples():
     assert row["duration_norm"]["unit"] == "h"
     assert "statistics_norm" not in row
     # r0002（缺身份字段/value）、r0003（缺 value）、r0004（定性 value）、
-    # r0005（只有 toxicity grade）、r0006（全空）都应被过滤
-    assert summary["invalid_removed"] == 5
-    assert summary["invalid_numeric_removed"] == 2
+    # r0005（只有 toxicity grade）、r0006（全空）、r0007（细胞周期定性描述）都应被过滤
+    assert summary["invalid_removed"] == 6
+    assert summary["invalid_numeric_removed"] == 3
     kept_ids = {r["record_id"] for r in rows}
     assert "PANCAN1::r0002" not in kept_ids
     assert "PANCAN1::r0003" not in kept_ids
     assert "PANCAN1::r0004" not in kept_ids
     assert "PANCAN1::r0005" not in kept_ids
     assert "PANCAN1::r0006" not in kept_ids
+    assert "PANCAN1::r0007" not in kept_ids
 
     print("  ✓ pancan preset 解析和标准化正确")
+    return True
+
+
+def test_required_numeric_accepts_plus_minus_value():
+    print("\n测试：required_numeric_all 接受 mean ± error 数值")
+    from src.agent.user_requirements import FieldSpec
+    from src.agent.tools.postprocess import postprocess_records
+
+    fields = [
+        FieldSpec("record_type", "Record type", "string"),
+        FieldSpec("compound_or_treatment", "Compound", "string"),
+        FieldSpec("model_or_population", "Model", "string"),
+        FieldSpec("endpoint", "Endpoint", "string"),
+        FieldSpec("value", "Value", "string"),
+    ]
+    records = [
+        {
+            "paper_id": "P1",
+            "record_id": "P1::r0001",
+            "record_type": "pk",
+            "compound_or_treatment": "NicNp",
+            "model_or_population": "tumor-bearing mice",
+            "endpoint": "Cmax",
+            "value": "138 ± 74.1",
+            "source_chunk_ids": ["c1"],
+        }
+    ]
+    config = {
+        "numeric_fields": {"value": {}},
+        "validity": {
+            "required_all": [
+                "record_type",
+                "compound_or_treatment",
+                "model_or_population",
+                "endpoint",
+                "value",
+            ],
+            "required_numeric_all": ["value"],
+        },
+    }
+
+    rows, summary = postprocess_records(records, fields, config)
+    assert len(rows) == 1
+    assert rows[0]["value_norm"]["operator"] == "plus_minus"
+    assert rows[0]["value_norm"]["value"] == 138.0
+    assert rows[0]["value_norm"]["error"] == 74.1
+    assert summary["invalid_numeric_removed"] == 0
+
+    print("  ✓ mean ± error 数值不会被误删")
     return True
 
 
@@ -410,6 +491,7 @@ def main():
         test_postprocess_records,
         test_run_postprocess_minimal,
         test_pancan_preset_examples,
+        test_required_numeric_accepts_plus_minus_value,
     ]
 
     all_pass = True

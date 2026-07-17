@@ -5,6 +5,9 @@ Examples:
   # From a Web of Science savedrecs.txt export or a directory of WOS txt files.
   python run_pipeline.py --requirements experiments/pancan/user_requirements.yaml --wos experiments/pancan/savedrecs.txt --output experiments/pancan/outputs --limit 10
 
+  # From a preselected WOS candidate_papers.jsonl subset.
+  python run_pipeline.py --requirements experiments/pancan/user_requirements.yaml --metadata experiments/pancan/candidates.jsonl --output experiments/pancan/outputs --limit 10
+
   # From local JATS/PMC XML files.
   python run_pipeline.py --requirements experiments/pancan/user_requirements.yaml --xml experiments/pancan/input_papers --output experiments/pancan/outputs --limit 10
 """
@@ -40,6 +43,11 @@ def _build_parser() -> argparse.ArgumentParser:
         nargs="+",
         metavar="PATH",
         help="WOS savedrecs.txt file(s), or directories containing WOS .txt files.",
+    )
+    source.add_argument(
+        "--metadata",
+        metavar="PATH",
+        help="Preselected candidate_papers.jsonl rows produced by run_wos_ingest.py.",
     )
     source.add_argument(
         "--xml",
@@ -115,22 +123,29 @@ def main(argv: list[str] | None = None) -> int:
     py = sys.executable
 
     try:
-        if args.wos:
-            _run([
-                py,
-                str(root / "run_wos_ingest.py"),
-                "--input",
-                *args.wos,
-                "--output",
-                str(output),
-            ])
+        if args.wos or args.metadata:
+            if args.wos:
+                _run([
+                    py,
+                    str(root / "run_wos_ingest.py"),
+                    "--input",
+                    *args.wos,
+                    "--output",
+                    str(output),
+                ])
+                metadata_path = output / "candidate_papers.jsonl"
+            else:
+                metadata_path = Path(args.metadata)
+                if not metadata_path.exists():
+                    parser.error(f"--metadata path not found: {metadata_path}")
+
             _run(_with_common_flags([
                 py,
                 str(root / "run_paper_filter.py"),
                 "--requirements",
                 str(requirements),
                 "--metadata",
-                str(output / "candidate_papers.jsonl"),
+                str(metadata_path),
                 "--output",
                 str(output),
             ], args.limit, args.force))

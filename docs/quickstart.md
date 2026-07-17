@@ -124,8 +124,18 @@ Bundled pancan example:
 .venv/bin/python run_pipeline.py \
   --requirements examples/pancan_treatment_outcomes/user_requirements.yaml \
   --wos examples/pancan_treatment_outcomes/wos_savedrecs \
-  --output outputs/pancan \
+  --output experiments/pancan/outputs \
   --limit 10
+```
+
+From a preselected WOS candidate subset:
+
+```bash
+.venv/bin/python run_pipeline.py \
+  --requirements examples/pancan_treatment_outcomes/user_requirements.yaml \
+  --metadata experiments/pancan/outputs/nonclinical_probe_candidates.jsonl \
+  --output experiments/pancan/nonclinical_probe \
+  --limit 8
 ```
 
 From local XML files:
@@ -136,6 +146,29 @@ From local XML files:
   --xml my_project/input_papers \
   --output my_project/outputs \
   --limit 10
+```
+
+Re-run extraction for a specific paper without touching other papers:
+
+```bash
+EXTRACTOR_MAX_TOKENS=4000 EXTRACTOR_TIMEOUT=180 .venv/bin/python run_extraction.py \
+  --requirements examples/pancan_treatment_outcomes/user_requirements.yaml \
+  --chunks experiments/pancan/outputs/parsed_chunks.jsonl \
+  --labels experiments/pancan/outputs/labeled_chunks.jsonl \
+  --output experiments/pancan/outputs \
+  --paper-id PMC9403942
+```
+
+Multiple `--paper-id` flags can be used in the same command. Do not add
+`--force`; selected paper records are replaced automatically.
+
+After any extraction rerun, regenerate the final CSV:
+
+```bash
+.venv/bin/python run_postprocess.py \
+  --requirements examples/pancan_treatment_outcomes/user_requirements.yaml \
+  --records experiments/pancan/outputs/extracted_records.jsonl \
+  --output experiments/pancan/outputs
 ```
 
 The stage-by-stage commands below are mainly for debugging or rerunning one

@@ -109,7 +109,7 @@ def assign_ids_and_source(
     records: list[dict],
     paper_id: str,
     field_names: list[str],
-    source_chunk_ids: list[str],
+    source_chunk_ids: list[str] | list[list[str]],
 ) -> list[dict]:
     """
     给去重后的 records 分配 record_id、补齐字段、附加 source_chunk_ids。
@@ -134,7 +134,18 @@ def assign_ids_and_source(
         }
         # record.fields 全量补齐，保持 yaml 顺序
         row.update(complement_fields(rec, field_names))
-        row["source_chunk_ids"] = list(source_chunk_ids)
+        row["source_chunk_ids"] = list(_source_ids_for_record(source_chunk_ids, i - 1))
         result.append(row)
 
     return result
+
+
+def _source_ids_for_record(
+    source_chunk_ids: list[str] | list[list[str]],
+    index: int,
+) -> list[str]:
+    if source_chunk_ids and isinstance(source_chunk_ids[0], list):
+        if index < len(source_chunk_ids):
+            return source_chunk_ids[index]
+        return []
+    return source_chunk_ids

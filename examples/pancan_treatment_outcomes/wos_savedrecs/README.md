@@ -7,7 +7,7 @@ Run a small resumable batch from the repository root:
 .venv/bin/python run_pipeline.py \
   --requirements examples/pancan_treatment_outcomes/user_requirements.yaml \
   --wos examples/pancan_treatment_outcomes/wos_savedrecs \
-  --output outputs/pancan \
+  --output experiments/pancan/outputs \
   --limit 10
 ```
 

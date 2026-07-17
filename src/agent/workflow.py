@@ -663,6 +663,7 @@ class DomainExtractionWorkflow:
         use_presets: bool = True,
         limit: int | None = None,
         resume: bool = True,
+        target_paper_ids: list[str] | set[str] | None = None,
     ) -> dict:
         """
         Labeling 阶段 MVP 主流程
@@ -1461,6 +1462,7 @@ class DomainExtractionWorkflow:
         use_presets: bool = True,
         limit: int | None = None,
         resume: bool = True,
+        target_paper_ids: list[str] | set[str] | None = None,
     ) -> dict:
         """
         Stage 2 Extraction 主流程。
@@ -1488,7 +1490,11 @@ class DomainExtractionWorkflow:
             create_instruction,
         )
         from .preset_manager import find_preset_file, render_prompt_template
-        from .tools.context_builder import build_context
+        from .tools.context_builder import (
+            build_context,
+            build_context_from_chunk_ids,
+            select_record_source_chunk_ids,
+        )
         from .tools.extractor import extract_records
         from .tools.record_cleanup import deduplicate, assign_ids_and_source
         from .tools.endpoint_constraints import build_endpoint_constraint
@@ -1562,7 +1568,23 @@ class DomainExtractionWorkflow:
             labeled_map.setdefault(row["paper_id"], set()).add(row["chunk_id"])
 
         paper_ids = list(labeled_map.keys())
+        target_set = set(target_paper_ids or [])
+        if target_set and not resume:
+            raise ValueError("target_paper_ids requires resume=True so existing non-target records are preserved")
+        missing_targets = sorted(target_set - set(paper_ids))
+        if missing_targets:
+            raise ValueError(
+                "Requested paper_id(s) not found in labeled chunks: "
+                + ", ".join(missing_targets)
+            )
+        selected_paper_ids = [
+            paper_id for paper_id in paper_ids
+            if not target_set or paper_id in target_set
+        ]
+
         logger.info(f"  {len(all_parsed)} chunks, {len(paper_ids)} papers")
+        if target_set:
+            logger.info(f"  Target paper_id(s): {', '.join(selected_paper_ids)}")
 
         # ── Step 3: 逐篇抽取 ──
         output_records_path = output_dir / "extracted_records.jsonl"
@@ -1582,11 +1604,15 @@ class DomainExtractionWorkflow:
             paper_id for paper_id, info in existing_by_paper.items()
             if str(info.get("extraction_status", "")).startswith(completed_statuses)
         }
-        pending_paper_ids = [
-            paper_id for paper_id in paper_ids
-            if not (resume and paper_id in completed_paper_ids)
-        ]
-        skipped_existing = len(paper_ids) - len(pending_paper_ids)
+        if target_set:
+            pending_paper_ids = selected_paper_ids
+            skipped_existing = len(paper_ids) - len(pending_paper_ids)
+        else:
+            pending_paper_ids = [
+                paper_id for paper_id in selected_paper_ids
+                if not (resume and paper_id in completed_paper_ids)
+            ]
+            skipped_existing = len(paper_ids) - len(pending_paper_ids)
         if limit:
             pending_paper_ids = pending_paper_ids[:limit]
 
@@ -1596,10 +1622,7 @@ class DomainExtractionWorkflow:
         )
 
         pending_set = set(pending_paper_ids)
-        all_records = [
-            row for row in existing_records
-            if row.get("paper_id") not in pending_set
-        ]
+        all_records = list(existing_records)
         by_paper = {
             paper_id: info
             for paper_id, info in existing_by_paper.items()
@@ -1616,6 +1639,10 @@ class DomainExtractionWorkflow:
 
             if not context_str:
                 logger.warning(f"    No context, skipping")
+                all_records = [
+                    row for row in all_records
+                    if row.get("paper_id") != paper_id
+                ]
                 by_paper[paper_id] = {
                     "extraction_status": "skipped:no_context",
                     "records_raw": 0,
@@ -1629,6 +1656,102 @@ class DomainExtractionWorkflow:
             raw_records, status = extract_records(
                 context_str, system_message, instruction, records_model, model_name=model_name
             )
+            split_retry_statuses = {
+                "failed:LengthFinishReasonError",
+                "failed:APITimeoutError",
+                "failed:TimeoutError",
+            }
+            if status in split_retry_statuses and len(used_ids) > 4:
+                logger.info(
+                    "    Extraction failed with %s; retrying in smaller context batches",
+                    status,
+                )
+                abstract_ids = [
+                    cid for cid in used_ids
+                    if chunk_store.get(cid, {}).get("chunk_type") == "abstract"
+                ]
+                evidence_ids = [cid for cid in used_ids if cid not in set(abstract_ids)]
+                if not evidence_ids:
+                    evidence_ids = used_ids
+                    abstract_ids = []
+
+                split_records: list[dict] = []
+                split_failures = 0
+                batch_size = 5
+                batches = [
+                    evidence_ids[i:i + batch_size]
+                    for i in range(0, len(evidence_ids), batch_size)
+                ]
+                for batch_idx, batch_evidence_ids in enumerate(batches, 1):
+                    batch_ids = list(dict.fromkeys(abstract_ids + batch_evidence_ids))
+                    batch_context = build_context_from_chunk_ids(chunk_store, batch_ids)
+                    logger.info(
+                        "      Split batch %d/%d: %d chunks, %d chars",
+                        batch_idx,
+                        len(batches),
+                        len(batch_ids),
+                        len(batch_context),
+                    )
+                    batch_records, batch_status = extract_records(
+                        batch_context,
+                        system_message,
+                        instruction,
+                        records_model,
+                        model_name=model_name,
+                    )
+                    logger.info(
+                        "      Split batch %d/%d status: %s, raw: %d",
+                        batch_idx,
+                        len(batches),
+                        batch_status,
+                        len(batch_records),
+                    )
+                    if batch_status.startswith("ok"):
+                        split_records.extend(batch_records)
+                    elif batch_status in split_retry_statuses and len(batch_evidence_ids) > 1:
+                        logger.info(
+                            "      Split batch %d/%d still failed; retrying individual chunks",
+                            batch_idx,
+                            len(batches),
+                        )
+                        for sub_idx, chunk_id in enumerate(batch_evidence_ids, 1):
+                            sub_ids = list(dict.fromkeys(abstract_ids + [chunk_id]))
+                            sub_context = build_context_from_chunk_ids(chunk_store, sub_ids)
+                            logger.info(
+                                "        Single chunk retry %d/%d: %s, %d chars",
+                                sub_idx,
+                                len(batch_evidence_ids),
+                                chunk_id,
+                                len(sub_context),
+                            )
+                            sub_records, sub_status = extract_records(
+                                sub_context,
+                                system_message,
+                                instruction,
+                                records_model,
+                                model_name=model_name,
+                            )
+                            logger.info(
+                                "        Single chunk retry %d/%d status: %s, raw: %d",
+                                sub_idx,
+                                len(batch_evidence_ids),
+                                sub_status,
+                                len(sub_records),
+                            )
+                            if sub_status.startswith("ok"):
+                                split_records.extend(sub_records)
+                            else:
+                                split_failures += 1
+                    else:
+                        split_failures += 1
+
+                if split_records:
+                    raw_records = split_records
+                    status = (
+                        f"ok:split_retry:{len(batches)}_batches"
+                        if split_failures == 0
+                        else f"ok:split_retry_partial:{len(batches)}_batches:{split_failures}_failed"
+                    )
             logger.info(f"    Status: {status}, raw: {len(raw_records)}")
 
             # Canonicalize/filter endpoint pairs before deduplication, so aliases
@@ -1643,11 +1766,27 @@ class DomainExtractionWorkflow:
 
             deduped, n_removed = deduplicate(raw_records, field_names)
 
-            cleaned = assign_ids_and_source(deduped, paper_id, field_names, used_ids)
+            record_source_ids = [
+                select_record_source_chunk_ids(record, chunk_store, used_ids)
+                for record in deduped
+            ]
+            cleaned = assign_ids_and_source(
+                deduped, paper_id, field_names, record_source_ids
+            )
 
             logger.info(f"    Cleaned: {len(cleaned)} ({n_removed} dedup removed)")
 
-            all_records.extend(cleaned)
+            if status.startswith("failed"):
+                logger.warning(
+                    "    Preserving existing records for %s because extraction failed",
+                    paper_id,
+                )
+            else:
+                all_records = [
+                    row for row in all_records
+                    if row.get("paper_id") != paper_id
+                ]
+                all_records.extend(cleaned)
             by_paper[paper_id] = {
                 "extraction_status": status,
                 "records_raw": len(raw_records),
@@ -1687,6 +1826,10 @@ class DomainExtractionWorkflow:
                 total_constraint_rejected_by_combo[combo] = (
                     total_constraint_rejected_by_combo.get(combo, 0) + count
                 )
+        this_run_summary = {
+            paper_id: by_paper.get(paper_id, {})
+            for paper_id in pending_paper_ids
+        }
         summary = {
             "total_papers_processed": len(paper_ids),
             "total_papers_failed": sum(
@@ -1700,6 +1843,21 @@ class DomainExtractionWorkflow:
             "by_paper": by_paper,
             "processed_this_run": len(pending_paper_ids),
             "skipped_existing": skipped_existing,
+            "processed_paper_ids_this_run": pending_paper_ids,
+            "records_raw_this_run": sum(
+                int(v.get("records_raw", 0)) for v in this_run_summary.values()
+            ),
+            "records_after_cleanup_this_run": sum(
+                int(v.get("records_after_cleanup", 0)) for v in this_run_summary.values()
+            ),
+            "duplicates_removed_this_run": sum(
+                int(v.get("duplicates_removed", 0)) for v in this_run_summary.values()
+            ),
+            "endpoint_constraint_rejected_this_run": sum(
+                int(v.get("endpoint_constraint_rejected", 0))
+                for v in this_run_summary.values()
+            ),
+            "by_paper_this_run": this_run_summary,
             "extractor_model": (
                 model_name
                 or _os.environ.get("EXTRACTOR_MODEL")

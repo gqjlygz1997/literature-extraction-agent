@@ -15,6 +15,10 @@ system_message: |
   - Only extract records that fit one of the allowed record_type values.
     Do not force unrelated evidence into the closest allowed category.
   - Prefer table values over prose when both describe the same endpoint/context.
+  - When a table or sentence reports numeric IC50/IC90/GI50/EC50 values for
+    multiple cell lines, organoids, or models, expand them into separate records
+    with the matching model and numeric value. Do not replace exact values with
+    qualitative phrases such as "nano-molar level".
   - Return only valid JSON when asked for JSON.
 
 instruction: |
@@ -48,10 +52,16 @@ instruction: |
     comparator/control, or patient/treatment context differs, create a separate record.
   - For in vitro records, keep the cell line/organoid/model, assay, endpoint,
     value, unit, concentration, duration, and comparator together.
+  - For IC50/IC90/GI50/EC50 evidence, always put the numeric concentration in
+    value and its concentration unit in unit. Examples: "3-10" + "uM",
+    "~14" + "uM", ">35" + "uM", "35.25" + "nM".
+  - If one sentence gives several matched model-value pairs, create one record
+    per pair. Example: "IC50 values for Panc-1, BxPC-3 and AsPC-1 were 35.25,
+    180.3 and 370.9 nM" means three records, all with endpoint IC50 and unit nM.
   - For in vivo records, keep the animal model, tumor model, dose, route,
     duration, endpoint, value, unit, and control together.
   - For PK records, keep compound, species/model, dose, route, sampling time,
-    PK parameter, value, and unit together.
+    PK parameter, biodistribution or uptake site when relevant, value, and unit together.
   - For animal toxicity records, keep species/model, dose, route, duration,
     toxicity endpoint, value, unit, and comparator/control together.
   - For clinical outcome records, keep patient group/trial arm, treatment,
@@ -72,7 +82,8 @@ instruction: |
       * For in_vivo_efficacy, use: tumor volume, tumor weight, tumor growth,
         tumor growth inhibition, tumor burden, survival, metastasis.
       * For pk, use: Cmax, Tmax, AUC, half-life, clearance, bioavailability,
-        volume of distribution.
+        volume of distribution, plasma concentration, tissue concentration,
+        biodistribution, tumor uptake.
       * For animal_toxicity, use: body weight change, mortality, clinical signs,
         hematology, clinical chemistry, histopathology, organ toxicity.
       * For clinical_outcome, use: OS, PFS, ORR, DCR, response rate,
@@ -89,7 +100,13 @@ instruction: |
   - duration: exposure time, treatment duration, follow-up time, or sampling time.
   - comparator_or_control: control, baseline, vehicle, placebo, standard therapy,
     untreated group, or comparator arm.
-  - sample_size: number of cells, animals, samples, or patients if stated.
+  - sample_size: arm-specific number of patients, animals, wells, replicates, or
+    samples for this exact record if stated. Prefer treatment/control arm N
+    such as "treatment N=911; control N=262,975" over a total database size.
+    Do not use total registry/cohort size, baseline-table row totals, accession
+    numbers, years, doses, percentages, cell seeding density, or total cells
+    plated as sample_size unless that number directly applies to this endpoint
+    record. If the matching N is unclear, use null.
   - statistics: p-value, CI, HR, SD, SE, error bar, or significance marker.
 
   Value quality rules:
@@ -142,6 +159,10 @@ endpoint_constraints:
       - clearance
       - bioavailability
       - volume of distribution
+      - plasma concentration
+      - tissue concentration
+      - biodistribution
+      - tumor uptake
     animal_toxicity:
       - body weight change
       - mortality
@@ -190,6 +211,24 @@ endpoint_constraints:
     clearance:
       - CL
       - drug clearance
+    plasma concentration:
+      - blood concentration
+      - serum concentration
+    tissue concentration:
+      - organ concentration
+      - concentration in tissue
+    biodistribution:
+      - bio-distribution
+      - tissue distribution
+      - organ distribution
+      - percent injected dose per gram
+      - "%ID/g"
+    tumor uptake:
+      - tumour uptake
+      - tumor accumulation
+      - tumour accumulation
+      - uptake in tumor
+      - uptake in tumour
     tumor growth inhibition:
       - TGI
       - growth inhibition

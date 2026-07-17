@@ -57,7 +57,7 @@ parsed_chunks.jsonl + labeled_chunks.jsonl + user_requirements.yaml
   [record_cleanup]
   同 paper 内严格规则去重
   字段全量补齐（缺失字段 → null）
-  分配 record_id，附加 source_chunk_ids
+  分配 record_id，附加每条 record 最相关的 source_chunk_ids
         ↓
   extracted_records.jsonl
 ```
@@ -97,7 +97,7 @@ parsed_chunks.jsonl + labeled_chunks.jsonl + user_requirements.yaml
 | `paper_id` | 来源论文 ID |
 | `record_id` | `{paper_id}::r{n:04d}`，同 paper 内从 r0001 开始编号 |
 | `record.fields` | 来自 `user_requirements.yaml`，缺失字段为 `null`，所有字段必须出现 |
-| `source_chunk_ids` | 构建上下文时使用的 chunk ids（含 abstract + labeled） |
+| `source_chunk_ids` | 每条 record 最可能来自的 chunk ids；由 value / endpoint / treatment / statistics 等字段反查上下文得到，通常比整篇 extraction 上下文更短 |
 
 > **重要**：所有字段值均为字符串（`Optional[str]`），即使 yaml 中定义为 `type: number`。数值规范化在 Stage 3 Post-processing 处理。
 
